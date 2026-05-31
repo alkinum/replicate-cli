@@ -180,7 +180,10 @@ replicate skill install --target ~/.codex/skills/replicate
 
 ```bash
 pnpm dev -- --help
+pnpm check
 pnpm typecheck
 pnpm test
 pnpm build
+pnpm release:dry-run
+pnpm publish:public
 ```

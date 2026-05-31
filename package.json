@@ -14,15 +14,25 @@
     "README.md",
     "LICENSE"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=22.12.0"
   },
   "scripts": {
-    "build": "tsup",
+    "build": "pnpm run clean && tsup",
+    "check": "pnpm lint && pnpm typecheck && pnpm test",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "dev": "tsx src/cli.ts",
     "format": "prettier --write .",
+    "link:global": "pnpm build && pnpm link --global",
     "lint": "eslint .",
-    "prepublishOnly": "pnpm lint && pnpm test && pnpm build",
+    "prepack": "pnpm build",
+    "prepublishOnly": "pnpm run check",
+    "publish:public": "pnpm run check && npm publish --access public",
+    "release:check": "pnpm run check && pnpm build",
+    "release:dry-run": "pnpm run check && npm pack --dry-run",
     "start": "tsx src/cli.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
