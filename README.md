@@ -78,7 +78,7 @@ Errors are machine-readable:
 replicate --json doctor
 replicate --json search "text to image" --limit 5
 replicate --json schema black-forest-labs/flux-schnell
-replicate --json run black-forest-labs/flux-schnell --input prompt="a product photo" --output ./out
+replicate --json run black-forest-labs/flux-schnell --input prompt="a product photo" --validate-schema --output ./out
 ```
 
 Async flow:
@@ -98,7 +98,8 @@ replicate --json collections list
 replicate --json models list --limit 20
 replicate --json models query "text to image" --limit 10
 replicate --json models get owner/model
-replicate --json versions list owner/model
+replicate --json models examples owner/model --limit 10
+replicate --json versions list owner/model --limit 20
 replicate --json schema owner/model
 ```
 
@@ -106,6 +107,7 @@ Predictions and outputs:
 
 ```bash
 replicate --json predictions create --model owner/model --input-json input.json --async
+replicate --json predictions create --model owner/model --input-json input.json --validate-schema --dry-run
 replicate --json predictions get <id>
 replicate --json predictions wait <id> --output ./out
 replicate --json predictions cancel <id> --confirm
@@ -127,7 +129,7 @@ Training and deployments:
 ```bash
 replicate --json trainings create owner/model:version --destination owner/new-model --input-json train.json --dry-run
 replicate --json trainings wait <training-id> --output ./out
-replicate --json deployments list
+replicate --json deployments list --limit 20
 replicate --json deployments create owner/name --model owner/model --version <version-id> --hardware <sku> --dry-run
 ```
 

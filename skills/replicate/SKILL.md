@@ -30,6 +30,7 @@ Search and inspect before running a model:
 ```bash
 replicate --json search "text to image" --limit 5
 replicate --json models get owner/model
+replicate --json versions list owner/model --limit 5
 replicate --json schema owner/model
 ```
 
@@ -40,7 +41,7 @@ Use `schema --raw` only when the simplified schema is insufficient. Prefer a con
 Always dry-run a new model or expensive input before spending credits:
 
 ```bash
-replicate --json run owner/model --input prompt="a clean product render" --dry-run
+replicate --json run owner/model --input prompt="a clean product render" --validate-schema --dry-run
 replicate --json run owner/model --input prompt="a clean product render" --output ./out
 ```
 
