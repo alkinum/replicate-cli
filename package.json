@@ -1,0 +1,50 @@
+{
+  "name": "@alkinum/replicate-cli",
+  "version": "0.1.0",
+  "description": "AI-first Replicate CLI for model discovery, schema inspection, predictions, artifacts, and resource management.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Alkinum",
+  "bin": {
+    "replicate": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "skills",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsx src/cli.ts",
+    "format": "prettier --write .",
+    "lint": "eslint .",
+    "prepublishOnly": "pnpm lint && pnpm test && pnpm build",
+    "start": "tsx src/cli.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "^8.5.1",
+    "commander": "^15.0.0",
+    "conf": "^15.1.0",
+    "replicate": "^1.4.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^25.9.1",
+    "eslint": "^10.4.1",
+    "globals": "^17.6.0",
+    "prettier": "^3.8.3",
+    "tsup": "^8.5.1",
+    "tsx": "^4.22.3",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.60.0",
+    "vitest": "^4.1.7"
+  },
+  "packageManager": "pnpm@10.24.0"
+}
