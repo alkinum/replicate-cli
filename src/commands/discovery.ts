@@ -10,7 +10,7 @@ export function registerDiscovery(root: Command): void {
     .option("--limit <number>", "maximum model results, 1-50", "20")
     .action(
       action("search", async (command, query: string) => {
-        const bundle = await clientFor(command, false);
+        const bundle = await clientFor(command);
         const response = await bundle.client.request("GET", "/search", {
           query: { query, limit: Number(command.opts().limit) }
         });
@@ -25,7 +25,7 @@ export function registerDiscovery(root: Command): void {
     .option("--limit <number>", "limit returned results")
     .action(
       action("collections", async (command) => {
-        const bundle = await clientFor(command, false);
+        const bundle = await clientFor(command);
         const data = (await bundle.client.request("GET", "/collections")).data as Record<string, any>;
         if (command.opts().limit && Array.isArray(data.results)) {
           data.results = data.results.slice(0, Number(command.opts().limit));
@@ -39,7 +39,7 @@ export function registerDiscovery(root: Command): void {
     .description("get a model collection")
     .action(
       action("collection", async (command, slug: string) => {
-        const bundle = await clientFor(command, false);
+        const bundle = await clientFor(command);
         return asResult("collection", (await bundle.client.request("GET", `/collections/${slug}`)).data, {
           meta: metaFor(bundle)
         });
@@ -50,7 +50,7 @@ export function registerDiscovery(root: Command): void {
 export function registerHardware(root: Command): void {
   root.command("hardware").description("hardware commands").command("list").description("list available hardware").action(
     action("hardware", async (command) => {
-      const bundle = await clientFor(command, false);
+      const bundle = await clientFor(command);
       return asResult("hardware", (await bundle.client.request("GET", "/hardware")).data, { meta: metaFor(bundle) });
     })
   );

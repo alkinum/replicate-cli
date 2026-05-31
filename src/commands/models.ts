@@ -9,7 +9,7 @@ export function registerModels(root: Command): void {
   const models = root.command("models").description("model commands");
   models.command("list").description("list public models").option("--limit <number>", "limit returned results").option("--cursor <url>", "next URL from prior response").option("--sort-by <field>", "sort field").option("--sort-direction <direction>", "sort direction").action(
     action("models", async (command) => {
-      const bundle = await clientFor(command, false);
+      const bundle = await clientFor(command);
       const opts = command.opts();
       const data = (await bundle.client.request("GET", opts.cursor ?? "/models", {
         query: opts.cursor
@@ -25,7 +25,7 @@ export function registerModels(root: Command): void {
   );
   models.command("query").argument("<query>", "model search query").description("search public models with the models query endpoint").option("--limit <number>", "limit returned results").action(
     action("models", async (command, query: string) => {
-      const bundle = await clientFor(command, false);
+      const bundle = await clientFor(command);
       const data = (await bundle.client.request("QUERY", "/models", {
         rawBody: query,
         headers: { "Content-Type": "text/plain" }
@@ -38,7 +38,7 @@ export function registerModels(root: Command): void {
   );
   models.command("get").argument("<owner/name>", "model ref").description("get a model").action(
     action("model", async (command, value: string) => {
-      const bundle = await clientFor(command, false);
+      const bundle = await clientFor(command);
       const ref = parseOwnerName(value, "model");
       return asResult("model", (await bundle.client.request("GET", `/models/${ref.owner}/${ref.name}`)).data, {
         meta: metaFor(bundle)
@@ -47,7 +47,7 @@ export function registerModels(root: Command): void {
   );
   models.command("readme").argument("<owner/name>", "model ref").description("get model README").action(
     action("model-readme", async (command, value: string) => {
-      const bundle = await clientFor(command, false);
+      const bundle = await clientFor(command);
       const ref = parseOwnerName(value, "model");
       return asResult("model-readme", (await bundle.client.request("GET", `/models/${ref.owner}/${ref.name}/readme`)).data, {
         meta: metaFor(bundle)
@@ -56,7 +56,7 @@ export function registerModels(root: Command): void {
   );
   models.command("examples").argument("<owner/name>", "model ref").description("list model examples").action(
     action("model-examples", async (command, value: string) => {
-      const bundle = await clientFor(command, false);
+      const bundle = await clientFor(command);
       const ref = parseOwnerName(value, "model");
       return asResult("model-examples", (await bundle.client.request("GET", `/models/${ref.owner}/${ref.name}/examples`)).data, {
         meta: metaFor(bundle)
@@ -89,7 +89,7 @@ function registerVersions(root: Command): void {
   const versions = root.command("versions").description("model version commands");
   versions.command("list").argument("<owner/name>", "model ref").description("list model versions").action(
     action("versions", async (command, value: string) => {
-      const bundle = await clientFor(command, false);
+      const bundle = await clientFor(command);
       const ref = parseOwnerName(value, "model");
       return asResult("versions", (await bundle.client.request("GET", `/models/${ref.owner}/${ref.name}/versions`)).data, {
         meta: metaFor(bundle)
@@ -98,7 +98,7 @@ function registerVersions(root: Command): void {
   );
   versions.command("get").argument("<owner/name:version>", "model version ref").description("get a model version").action(
     action("version", async (command, value: string) => {
-      const bundle = await clientFor(command, false);
+      const bundle = await clientFor(command);
       const ref = parseModelRef(value);
       throwIfMissing(ref.version, "version");
       return asResult("version", (await bundle.client.request("GET", `/models/${ref.owner}/${ref.name}/versions/${ref.version}`)).data, {
@@ -123,7 +123,7 @@ function registerVersions(root: Command): void {
 function registerSchema(root: Command): void {
   root.command("schema").argument("<owner/name>", "model ref").description("show simplified model input schema").option("--version <id>", "version id").option("--raw", "emit raw OpenAPI schema").action(
     action("schema", async (command, value: string) => {
-      const bundle = await clientFor(command, false);
+      const bundle = await clientFor(command);
       const ref = parseOwnerName(value, "model");
       const data = command.opts().version
         ? ((await bundle.client.request("GET", `/models/${ref.owner}/${ref.name}/versions/${command.opts().version}`)).data as Record<string, any>)
