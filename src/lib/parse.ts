@@ -137,6 +137,20 @@ export function parseWaitSeconds(value: string | number | undefined, fallback = 
   return raw;
 }
 
+export function parseLimit(
+  value: string | number | undefined,
+  options: { min?: number; max?: number } = {}
+): number | undefined {
+  if (value === undefined) return undefined;
+  const min = options.min ?? 1;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < min || (options.max !== undefined && parsed > options.max)) {
+    const range = options.max === undefined ? `at least ${min}` : `from ${min} to ${options.max}`;
+    throw new CliError("invalid_limit", `--limit must be an integer ${range}.`);
+  }
+  return parsed;
+}
+
 export function toQuery(values?: string[]): Record<string, string> {
   const output: Record<string, string> = {};
   for (const value of values ?? []) {

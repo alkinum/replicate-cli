@@ -1,9 +1,9 @@
 import { Command } from "commander";
-import { assertConfirm, CliError } from "../lib/errors.js";
+import { ApiError, assertConfirm, CliError } from "../lib/errors.js";
 import { asResult, throwIfMissing } from "../lib/output.js";
-import { parseModelRef, parseOwnerName } from "../lib/parse.js";
+import { parseLimit, parseModelRef, parseOwnerName } from "../lib/parse.js";
 import { simplifyOpenApiSchema } from "../lib/schema.js";
-import { action, bodyFromOptions, clientFor, metaFor, requestPreview } from "./shared.js";
+import { action, bodyFromOptions, clientFor, collectPaginatedResults, metaFor, requestPaginated, requestPreview } from "./shared.js";
 
 export function registerModels(root: Command): void {
   const models = root.command("models").description("model commands");
@@ -11,27 +11,32 @@ export function registerModels(root: Command): void {
     action("models", async (command) => {
       const bundle = await clientFor(command);
       const opts = command.opts();
-      const data = (await bundle.client.request("GET", opts.cursor ?? "/models", {
+      const data = await requestPaginated(bundle.client, opts.cursor ?? "/models", {
+        limit: opts.limit,
         query: opts.cursor
           ? undefined
           : {
               sort_by: opts.sortBy,
               sort_direction: opts.sortDirection
             }
-      })).data as Record<string, any>;
-      if (opts.limit && Array.isArray(data.results)) data.results = data.results.slice(0, Number(opts.limit));
+      });
       return asResult("models", data, { meta: metaFor(bundle) });
     })
   );
   models.command("query").argument("<query>", "model search query").description("search public models with the models query endpoint").option("--limit <number>", "limit returned results").action(
     action("models", async (command, query: string) => {
+      const limit = parseLimit(command.opts().limit);
       const bundle = await clientFor(command);
-      const data = (await bundle.client.request("QUERY", "/models", {
-        rawBody: query,
-        headers: { "Content-Type": "text/plain" }
-      })).data as Record<string, any>;
-      if (command.opts().limit && Array.isArray(data.results)) {
-        data.results = data.results.slice(0, Number(command.opts().limit));
+      let data: Record<string, any>;
+      try {
+        const first = (await bundle.client.request("QUERY", "/models", {
+          rawBody: query,
+          headers: { "Content-Type": "text/plain" }
+        })).data as Record<string, any>;
+        data = await collectPaginatedResults(bundle.client, first, limit);
+      } catch (error) {
+        if (!(error instanceof ApiError) || (error.status !== 405 && error.status !== 501)) throw error;
+        data = (await bundle.client.request("GET", "/search", { query: { query, limit: limit === undefined ? undefined : Math.min(limit, 50) } })).data as Record<string, any>;
       }
       return asResult("models", data, { meta: metaFor(bundle) });
     })
@@ -54,11 +59,14 @@ export function registerModels(root: Command): void {
       });
     })
   );
-  models.command("examples").argument("<owner/name>", "model ref").description("list model examples").action(
+  models.command("examples").argument("<owner/name>", "model ref").description("list model examples").option("--limit <number>", "limit returned results").action(
     action("model-examples", async (command, value: string) => {
       const bundle = await clientFor(command);
       const ref = parseOwnerName(value, "model");
-      return asResult("model-examples", (await bundle.client.request("GET", `/models/${ref.owner}/${ref.name}/examples`)).data, {
+      const data = await requestPaginated(bundle.client, `/models/${ref.owner}/${ref.name}/examples`, {
+        limit: command.opts().limit
+      });
+      return asResult("model-examples", data, {
         meta: metaFor(bundle)
       });
     })
@@ -87,11 +95,14 @@ export function registerModels(root: Command): void {
 
 function registerVersions(root: Command): void {
   const versions = root.command("versions").description("model version commands");
-  versions.command("list").argument("<owner/name>", "model ref").description("list model versions").action(
+  versions.command("list").argument("<owner/name>", "model ref").description("list model versions").option("--limit <number>", "limit returned results").action(
     action("versions", async (command, value: string) => {
       const bundle = await clientFor(command);
       const ref = parseOwnerName(value, "model");
-      return asResult("versions", (await bundle.client.request("GET", `/models/${ref.owner}/${ref.name}/versions`)).data, {
+      const data = await requestPaginated(bundle.client, `/models/${ref.owner}/${ref.name}/versions`, {
+        limit: command.opts().limit
+      });
+      return asResult("versions", data, {
         meta: metaFor(bundle)
       });
     })

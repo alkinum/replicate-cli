@@ -8,11 +8,13 @@ import {
   absolutePath,
   mergeInput,
   parseDurationMs,
+  parseLimit,
   parseModelRef,
   parseOwnerName,
   parseWaitSeconds,
   readJsonFile
 } from "../lib/parse.js";
+import { validateInputAgainstOpenApiSchema } from "../lib/schema.js";
 
 export const VERSION = "0.1.0";
 
@@ -160,6 +162,42 @@ export function requestPreview(
   return { method, path, headers, body };
 }
 
+export async function requestPaginated(
+  client: ReplicateHttpClient,
+  path: string,
+  options: {
+    limit?: string;
+    query?: Record<string, string | number | boolean | undefined>;
+  } = {}
+): Promise<Record<string, any>> {
+  const limit = parseLimit(options.limit);
+  const first = (await client.request("GET", path, { query: options.query })).data as Record<string, any>;
+  return collectPaginatedResults(client, first, limit);
+}
+
+export async function collectPaginatedResults(
+  client: ReplicateHttpClient,
+  first: Record<string, any>,
+  limit?: number
+): Promise<Record<string, any>> {
+  if (!Array.isArray(first.results) || limit === undefined) return first;
+  if (limit <= first.results.length) return { ...first, results: first.results.slice(0, limit) };
+  const results = [...first.results];
+  let next = typeof first.next === "string" ? first.next : undefined;
+  while (next && results.length < limit) {
+    const page = (await client.request("GET", next)).data as Record<string, any>;
+    if (!Array.isArray(page.results)) break;
+    results.push(...page.results);
+    next = typeof page.next === "string" ? page.next : undefined;
+  }
+
+  return {
+    ...first,
+    next,
+    results: results.slice(0, limit)
+  };
+}
+
 export async function createPrediction(
   command: Command,
   options: {
@@ -210,6 +248,45 @@ export async function createPrediction(
 
   const response = await bundle.client.request("POST", path, { body, headers });
   return { data: response.data, bundle, path, body };
+}
+
+export async function validatePredictionInput(
+  command: Command,
+  options: {
+    deployment?: string;
+    input: Record<string, unknown>;
+    model?: string;
+    validateSchema?: boolean;
+    version?: string;
+  }
+): Promise<void> {
+  if (!options.validateSchema) return;
+  if (options.deployment) {
+    throw new CliError("schema_validation_unavailable", "Schema validation is not available for deployment predictions.");
+  }
+
+  const bundle = await clientFor(command);
+  const modelRef = options.model ? parseModelRef(options.model) : undefined;
+  const versionRef = options.version?.includes("/") ? parseModelRef(options.version) : undefined;
+  const ref = modelRef ?? versionRef;
+  throwIfMissing(ref, "model or --version owner/model:version");
+  const version = options.version ?? ref.version;
+
+  const versionId = version?.includes("/") ? parseModelRef(version).version : version;
+  const data = versionId
+    ? ((await bundle.client.request("GET", `/models/${ref.owner}/${ref.name}/versions/${versionId}`)).data as Record<string, any>)
+    : ((await bundle.client.request("GET", `/models/${ref.owner}/${ref.name}`)).data as Record<string, any>);
+  const openapi = version ? data.openapi_schema : data.latest_version?.openapi_schema;
+  if (!openapi) {
+    throw new CliError("schema_missing", "Model schema is not available.", { details: data });
+  }
+  const issues = validateInputAgainstOpenApiSchema(openapi, options.input);
+  if (issues.length > 0) {
+    throw new CliError("schema_validation_failed", "Input does not match the model schema.", {
+      details: { issues },
+      exitCode: 1
+    });
+  }
 }
 
 export async function maybeDownloadPredictionOutput(

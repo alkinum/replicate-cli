@@ -4,7 +4,7 @@ import { downloadArtifacts } from "../lib/files.js";
 import { asResult, throwIfMissing } from "../lib/output.js";
 import { parseModelRef } from "../lib/parse.js";
 import { waitForResource } from "../lib/predictions.js";
-import { action, addInputOptions, addWriteSafety, buildInput, clientFor, metaFor, requestPreview } from "./shared.js";
+import { action, addInputOptions, addWriteSafety, buildInput, clientFor, metaFor, requestPaginated, requestPreview } from "./shared.js";
 
 export function registerTrainings(root: Command): void {
   const trainings = root.command("trainings").description("training commands");
@@ -39,8 +39,7 @@ export function registerTrainings(root: Command): void {
   trainings.command("list").description("list trainings").option("--limit <number>", "limit returned results").action(
     action("trainings", async (command) => {
       const bundle = await clientFor(command);
-      const data = (await bundle.client.request("GET", "/trainings")).data as Record<string, any>;
-      if (command.opts().limit && Array.isArray(data.results)) data.results = data.results.slice(0, Number(command.opts().limit));
+      const data = await requestPaginated(bundle.client, "/trainings", { limit: command.opts().limit });
       return asResult("trainings", data, { meta: metaFor(bundle) });
     })
   );

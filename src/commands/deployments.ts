@@ -2,16 +2,15 @@ import { Command } from "commander";
 import { assertConfirm } from "../lib/errors.js";
 import { asResult } from "../lib/output.js";
 import { parseOwnerName } from "../lib/parse.js";
-import { action, bodyFromOptions, clientFor, metaFor, requestPreview } from "./shared.js";
+import { action, bodyFromOptions, clientFor, metaFor, requestPaginated, requestPreview } from "./shared.js";
 
 export function registerDeployments(root: Command): void {
   const deployments = root.command("deployments").description("deployment commands");
-  deployments.command("list").description("list deployments").action(
+  deployments.command("list").description("list deployments").option("--limit <number>", "limit returned results").action(
     action("deployments", async (command) => {
       const bundle = await clientFor(command);
-      return asResult("deployments", (await bundle.client.request("GET", "/deployments")).data, {
-        meta: metaFor(bundle)
-      });
+      const data = await requestPaginated(bundle.client, "/deployments", { limit: command.opts().limit });
+      return asResult("deployments", data, { meta: metaFor(bundle) });
     })
   );
   deployments.command("get").argument("<owner/name>", "deployment ref").description("get a deployment").action(

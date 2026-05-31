@@ -5,17 +5,14 @@ import { CliError, assertConfirm } from "../lib/errors.js";
 import { uploadFile } from "../lib/files.js";
 import { asResult } from "../lib/output.js";
 import { readJsonFile } from "../lib/parse.js";
-import { action, clientFor, metaFor } from "./shared.js";
+import { action, clientFor, metaFor, requestPaginated } from "./shared.js";
 
 export function registerFiles(root: Command): void {
   const files = root.command("files").description("Replicate file commands");
   files.command("list").description("list files").option("--limit <number>", "limit returned results").action(
     action("files", async (command) => {
       const bundle = await clientFor(command);
-      const data = (await bundle.client.request("GET", "/files")).data as Record<string, any>;
-      if (command.opts().limit && Array.isArray(data.results)) {
-        data.results = data.results.slice(0, Number(command.opts().limit));
-      }
+      const data = await requestPaginated(bundle.client, "/files", { limit: command.opts().limit });
       return asResult("files", data, { meta: metaFor(bundle) });
     })
   );

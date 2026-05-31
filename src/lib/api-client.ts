@@ -5,6 +5,7 @@ export interface RequestOptions {
   body?: unknown;
   headers?: Record<string, string>;
   formData?: FormData;
+  maxRetries?: number;
   timeoutMs?: number;
   rawBody?: BodyInit;
 }
@@ -32,9 +33,6 @@ export class ReplicateHttpClient {
     options: RequestOptions = {}
   ): Promise<ApiResponse<T>> {
     const url = this.buildUrl(path, options.query);
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? this.timeoutMs);
-
     const headers = new Headers(options.headers);
     if (this.token && !headers.has("Authorization")) {
       headers.set("Authorization", `Bearer ${this.token}`);
@@ -50,33 +48,55 @@ export class ReplicateHttpClient {
       body = JSON.stringify(options.body);
     }
 
-    try {
-      const response = await fetch(url, {
-        method: method.toUpperCase(),
-        headers,
-        body,
-        signal: controller.signal
-      });
-      const data = await parseResponseBody(response);
-      if (!response.ok) {
-        throw new ApiError(apiMessage(data, response.status), {
-          status: response.status,
-          data,
-          retryAfterSeconds: retryAfterSeconds(response.headers)
+    const normalizedMethod = method.toUpperCase();
+    const maxRetries = retryableMethod(normalizedMethod) ? (options.maxRetries ?? 2) : 0;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? this.timeoutMs);
+      try {
+        const response = await fetch(url, {
+          method: normalizedMethod,
+          headers,
+          body,
+          signal: controller.signal
         });
+        const data = await parseResponseBody(response);
+        const retryAfter = retryAfterSeconds(response.headers);
+        if (!response.ok) {
+          if (attempt < maxRetries && retryableStatus(response.status)) {
+            await sleep(retryDelayMs(attempt, retryAfter));
+            continue;
+          }
+          throw new ApiError(apiMessage(data, response.status), {
+            status: response.status,
+            data,
+            retryAfterSeconds: retryAfter
+          });
+        }
+        return { data: data as T, status: response.status, headers: response.headers };
+      } catch (error) {
+        if ((error as Error).name === "AbortError") {
+          if (attempt < maxRetries) {
+            await sleep(retryDelayMs(attempt));
+            continue;
+          }
+          throw new CliError("network_timeout", `Request timed out: ${method} ${url}`, {
+            exitCode: 5,
+            cause: error
+          });
+        }
+        if (attempt < maxRetries && retryableNetworkError(error)) {
+          await sleep(retryDelayMs(attempt));
+          continue;
+        }
+        throw error;
+      } finally {
+        clearTimeout(timeout);
       }
-      return { data: data as T, status: response.status, headers: response.headers };
-    } catch (error) {
-      if ((error as Error).name === "AbortError") {
-        throw new CliError("network_timeout", `Request timed out: ${method} ${url}`, {
-          exitCode: 5,
-          cause: error
-        });
-      }
-      throw error;
-    } finally {
-      clearTimeout(timeout);
     }
+
+    throw new CliError("unexpected_retry_state", `Retry loop exhausted unexpectedly: ${method} ${url}`);
   }
 
   buildUrl(path: string, query?: RequestOptions["query"]): string {
@@ -86,6 +106,27 @@ export class ReplicateHttpClient {
     }
     return url.toString();
   }
+}
+
+function retryableMethod(method: string): boolean {
+  return method === "GET" || method === "HEAD" || method === "QUERY";
+}
+
+function retryableStatus(status: number): boolean {
+  return status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+}
+
+function retryableNetworkError(error: unknown): boolean {
+  return error instanceof TypeError;
+}
+
+function retryDelayMs(attempt: number, retryAfterSeconds?: number): number {
+  if (retryAfterSeconds !== undefined) return Math.min(retryAfterSeconds * 1000, 10_000);
+  return Math.min(500 * 2 ** attempt, 5_000);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function parseResponseBody(response: Response): Promise<unknown> {

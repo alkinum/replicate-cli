@@ -9,7 +9,9 @@ import {
   clientFor,
   createPrediction,
   maybeDownloadPredictionOutput,
-  metaFor
+  metaFor,
+  requestPaginated,
+  validatePredictionInput
 } from "./shared.js";
 import { assertConfirm, CliError } from "../lib/errors.js";
 
@@ -26,12 +28,20 @@ export function registerPredictions(root: Command): void {
     .option("--webhook <url>", "webhook URL")
     .option("--webhook-events <events>", "comma-separated webhook event filter")
     .option("-o, --output <dir>", "download output files to directory")
+    .option("--validate-schema", "fetch model schema and validate inputs before creating prediction")
     .option("--dry-run", "preview request without creating prediction")
     .action(
       action("prediction", async (command, model?: string) => {
         const opts = command.opts();
         const initialBundle = await clientFor(command, !opts.dryRun);
         const input = await buildInput(opts, initialBundle.client, opts.dryRun);
+        await validatePredictionInput(command, {
+          model,
+          version: opts.version,
+          deployment: opts.deployment,
+          input,
+          validateSchema: opts.validateSchema
+        });
         const created = await createPrediction(command, {
           model,
           version: opts.version,
@@ -67,12 +77,20 @@ export function registerPredictions(root: Command): void {
     .option("--webhook <url>", "webhook URL")
     .option("--webhook-events <events>", "comma-separated webhook event filter")
     .option("-o, --output <dir>", "download output files to directory")
+    .option("--validate-schema", "fetch model schema and validate inputs before creating prediction")
     .option("--dry-run", "preview request without creating prediction")
     .action(
       action("prediction", async (command) => {
         const opts = command.opts();
         const initialBundle = await clientFor(command, !opts.dryRun);
         const input = await buildInput(opts, initialBundle.client, opts.dryRun);
+        await validatePredictionInput(command, {
+          model: opts.model,
+          version: opts.version,
+          deployment: opts.deployment,
+          input,
+          validateSchema: opts.validateSchema
+        });
         const created = await createPrediction(command, {
           model: opts.model,
           version: opts.version,
@@ -109,14 +127,14 @@ export function registerPredictions(root: Command): void {
     action("predictions", async (command) => {
       const bundle = await clientFor(command);
       const opts = command.opts();
-      const data = (await bundle.client.request("GET", "/predictions", {
+      const data = await requestPaginated(bundle.client, "/predictions", {
+        limit: opts.limit,
         query: {
           source: opts.source,
           created_after: opts.createdAfter,
           created_before: opts.createdBefore
         }
-      })).data as Record<string, any>;
-      if (opts.limit && Array.isArray(data.results)) data.results = data.results.slice(0, Number(opts.limit));
+      });
       return asResult("predictions", data, { meta: metaFor(bundle) });
     })
   );

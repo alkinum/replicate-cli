@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import { asResult } from "../lib/output.js";
-import { action, clientFor, metaFor } from "./shared.js";
+import { parseLimit } from "../lib/parse.js";
+import { action, clientFor, metaFor, requestPaginated } from "./shared.js";
 
 export function registerDiscovery(root: Command): void {
   root
@@ -10,9 +11,10 @@ export function registerDiscovery(root: Command): void {
     .option("--limit <number>", "maximum model results, 1-50", "20")
     .action(
       action("search", async (command, query: string) => {
+        const limit = parseLimit(command.opts().limit, { max: 50 });
         const bundle = await clientFor(command);
         const response = await bundle.client.request("GET", "/search", {
-          query: { query, limit: Number(command.opts().limit) }
+          query: { query, limit }
         });
         return asResult("search", response.data, { meta: { ...metaFor(bundle), beta: true } });
       })
@@ -26,10 +28,7 @@ export function registerDiscovery(root: Command): void {
     .action(
       action("collections", async (command) => {
         const bundle = await clientFor(command);
-        const data = (await bundle.client.request("GET", "/collections")).data as Record<string, any>;
-        if (command.opts().limit && Array.isArray(data.results)) {
-          data.results = data.results.slice(0, Number(command.opts().limit));
-        }
+        const data = await requestPaginated(bundle.client, "/collections", { limit: command.opts().limit });
         return asResult("collections", data, { meta: metaFor(bundle) });
       })
     );
