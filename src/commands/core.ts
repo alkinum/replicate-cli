@@ -2,7 +2,9 @@ import { password } from "@inquirer/prompts";
 import { Command } from "commander";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { clearAuthToken, resolveAuth, setAuthToken } from "../lib/auth.js";
 import { ReplicateHttpClient } from "../lib/api-client.js";
 import { asResult } from "../lib/output.js";
@@ -109,13 +111,14 @@ export function registerSkill(root: Command): void {
 }
 
 function skillPath(): string {
-  const bundled = new URL("../skills/replicate/SKILL.md", import.meta.url).pathname;
+  const bundled = fileURLToPath(new URL("../skills/replicate/SKILL.md", import.meta.url));
   if (existsSync(bundled)) return bundled;
-  return new URL("../../skills/replicate/SKILL.md", import.meta.url).pathname;
+  return fileURLToPath(new URL("../../skills/replicate/SKILL.md", import.meta.url));
 }
 
 function expandHome(path: string): string {
-  if (path === "~") return process.env.HOME ?? path;
-  if (path.startsWith("~/")) return resolve(process.env.HOME ?? ".", path.slice(2));
+  const home = homedir();
+  if (path === "~") return home;
+  if (path.startsWith("~/")) return resolve(home, path.slice(2));
   return resolve(path);
 }
