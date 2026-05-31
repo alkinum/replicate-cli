@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseDurationMs, parseKeyValues, parseModelRef } from "../src/lib/parse.js";
+import { parseDurationMs, parseKeyValues, parseLimit, parseModelRef } from "../src/lib/parse.js";
 
 describe("parse utilities", () => {
   it("parses key/value inputs with JSON literals", () => {
@@ -22,5 +22,12 @@ describe("parse utilities", () => {
   it("parses durations", () => {
     expect(parseDurationMs("1h30m5s")).toBe(5_405_000);
     expect(parseDurationMs("250ms")).toBe(250);
+  });
+
+  it("validates limit values", () => {
+    expect(parseLimit("12", { max: 50 })).toBe(12);
+    expect(() => parseLimit("0")).toThrow("--limit must be an integer at least 1.");
+    expect(() => parseLimit("51", { max: 50 })).toThrow("--limit must be an integer from 1 to 50.");
+    expect(() => parseLimit("abc")).toThrow("--limit must be an integer at least 1.");
   });
 });
