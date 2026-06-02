@@ -12,4 +12,28 @@ describe("error redaction", () => {
     expect(redactDeep("r8_abcdefghijklmnopqrstuvwxyz")).toBe("r8_a...wxyz");
     expect(redactDeep({ token: "secret-value" })).toEqual({ token: "secr...alue" });
   });
+
+  it("does not redact schema descriptors for sensitive input names", () => {
+    expect(
+      redactDeep({
+        properties: {
+          openai_api_key: {
+            type: "string",
+            format: "password",
+            description: "Optional API key",
+            "x-cog-secret": true
+          }
+        }
+      })
+    ).toEqual({
+      properties: {
+        openai_api_key: {
+          type: "string",
+          format: "password",
+          description: "Optional API key",
+          "x-cog-secret": true
+        }
+      }
+    });
+  });
 });

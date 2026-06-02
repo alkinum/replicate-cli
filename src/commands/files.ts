@@ -31,12 +31,16 @@ export function registerFiles(root: Command): void {
       return asResult("file", (await bundle.client.request("GET", `/files/${id}`)).data, { meta: metaFor(bundle) });
     })
   );
-  files.command("download").argument("<id-or-url>", "file id or signed URL").description("download a file").requiredOption("-o, --output <path>", "output path").action(
+  files.command("download").argument("<signed-url>", "signed file download URL").description("download a file").requiredOption("-o, --output <path>", "output path").action(
     action("file", async (command, idOrUrl: string) => {
-      const bundle = await clientFor(command);
-      const url = /^https?:\/\//.test(idOrUrl)
-        ? idOrUrl
-        : bundle.client.buildUrl(`/files/${idOrUrl}/download`);
+      if (!/^https?:\/\//.test(idOrUrl)) {
+        throw new CliError(
+          "file_download_url_required",
+          "File downloads require a signed Replicate file download URL, not a bare file ID."
+        );
+      }
+      const bundle = await clientFor(command, false);
+      const url = idOrUrl;
       const response = await fetch(url, {
         headers: bundle.auth.token ? { Authorization: `Bearer ${bundle.auth.token}` } : undefined,
         signal: AbortSignal.timeout(bundle.timeoutMs ?? 120_000)

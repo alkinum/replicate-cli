@@ -113,8 +113,13 @@ export function parseDurationMs(input: string | number | undefined): number | un
   if (matches.length === 0) {
     throw new CliError("invalid_duration", `Invalid duration: ${input}`);
   }
+  let cursor = 0;
   let total = 0;
   for (const match of matches) {
+    if (match.index !== cursor) {
+      throw new CliError("invalid_duration", `Invalid duration: ${input}`);
+    }
+    cursor += match[0].length;
     const amount = Number(match[1]);
     const unit = match[2];
     total +=
@@ -126,13 +131,16 @@ export function parseDurationMs(input: string | number | undefined): number | un
             ? amount * 1000
             : amount;
   }
+  if (cursor !== value.length) {
+    throw new CliError("invalid_duration", `Invalid duration: ${input}`);
+  }
   return total;
 }
 
 export function parseWaitSeconds(value: string | number | undefined, fallback = 60): number {
   const raw = value === undefined ? fallback : Number(value);
-  if (!Number.isInteger(raw) || raw < 1) {
-    throw new CliError("invalid_wait", "--wait must be an integer at least 1.");
+  if (!Number.isInteger(raw) || raw < 1 || raw > 60) {
+    throw new CliError("invalid_wait", "--wait must be an integer from 1 to 60.");
   }
   return raw;
 }

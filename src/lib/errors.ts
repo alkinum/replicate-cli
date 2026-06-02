@@ -111,12 +111,7 @@ export function redactDeep(value: unknown): unknown {
     const output: Record<string, unknown> = {};
     for (const [key, child] of Object.entries(value)) {
       if (/token|authorization|secret|api[_-]?key/i.test(key)) {
-        output[key] =
-          child === undefined
-            ? undefined
-            : typeof child === "string"
-              ? redactSecret(child)
-              : "***";
+        output[key] = redactSensitiveValue(child);
       } else {
         output[key] = redactDeep(child);
       }
@@ -125,4 +120,34 @@ export function redactDeep(value: unknown): unknown {
   }
 
   return value;
+}
+
+function redactSensitiveValue(value: unknown): unknown {
+  if (value === undefined) return undefined;
+  if (typeof value === "string") return redactSecret(value);
+  if (value === null || typeof value === "boolean" || typeof value === "number") return value;
+  if (isSchemaDescriptor(value)) return redactDeep(value);
+  return "***";
+}
+
+function isSchemaDescriptor(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  return Object.keys(value).some((key) =>
+    [
+      "$ref",
+      "allOf",
+      "anyOf",
+      "default",
+      "description",
+      "enum",
+      "format",
+      "items",
+      "nullable",
+      "oneOf",
+      "properties",
+      "title",
+      "type",
+      "x-order"
+    ].includes(key)
+  );
 }

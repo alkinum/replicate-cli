@@ -11,6 +11,7 @@ export interface SimplifiedSchemaField {
   order?: number;
   format?: string;
   file?: boolean;
+  nullable?: boolean;
 }
 
 export interface SchemaValidationIssue {
@@ -20,6 +21,7 @@ export interface SchemaValidationIssue {
 }
 
 export function simplifyOpenApiSchema(schema: unknown): SimplifiedSchemaField[] {
+  const root = asRecord(schema);
   const inputSchema = locateInputSchema(schema);
   const required = new Set<string>(
     Array.isArray(inputSchema?.required) ? (inputSchema.required as string[]) : []
@@ -28,7 +30,7 @@ export function simplifyOpenApiSchema(schema: unknown): SimplifiedSchemaField[] 
   if (!properties || typeof properties !== "object") return [];
 
   return Object.entries(properties as Record<string, Record<string, unknown>>)
-    .map(([name, property]) => simplifyField(name, property, required.has(name)))
+    .map(([name, property]) => simplifyField(root, name, property, required.has(name)))
     .sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999) || a.name.localeCompare(b.name));
 }
 
@@ -107,11 +109,12 @@ function locateInputSchema(schema: unknown): Record<string, unknown> | undefined
 }
 
 function simplifyField(
+  root: Record<string, unknown> | undefined,
   name: string,
   property: Record<string, unknown>,
   required: boolean
 ): SimplifiedSchemaField {
-  const merged = mergeComposed(property);
+  const merged = normalizeSchema(root, property);
   const type = typeFor(merged);
   return {
     name,
@@ -125,31 +128,161 @@ function simplifyField(
     title: typeof merged.title === "string" ? merged.title : undefined,
     order: typeof merged["x-order"] === "number" ? merged["x-order"] : undefined,
     format: typeof merged.format === "string" ? merged.format : undefined,
-    file:
-      merged.format === "uri" ||
-      type === "file" ||
-      /file|image|audio|video/i.test(`${name} ${String(merged.description ?? "")}`)
+    file: isFileField(root, name, merged),
+    nullable: isNullable(merged) ? true : undefined
   };
 }
 
-function mergeComposed(property: Record<string, unknown>): Record<string, unknown> {
-  const allOf = property.allOf;
-  if (!Array.isArray(allOf)) return property;
-  return Object.assign({}, ...allOf.filter((item) => item && typeof item === "object"), property);
+function normalizeSchema(
+  root: Record<string, unknown> | undefined,
+  schema: unknown,
+  seen = new Set<string>()
+): Record<string, unknown> {
+  const record = asRecord(schema);
+  if (!record) return {};
+
+  let merged: Record<string, unknown> = {};
+  if (typeof record.$ref === "string") {
+    merged = mergeDefined(merged, resolveRef(root, record.$ref, seen));
+  }
+
+  merged = mergeDefined(merged, omit(record, "$ref"));
+
+  const allOf = merged.allOf;
+  if (Array.isArray(allOf)) {
+    merged = mergeDefined(
+      ...allOf.map((item) => normalizeSchema(root, item, seen)),
+      omit(merged, "allOf")
+    );
+  }
+
+  for (const key of ["oneOf", "anyOf"]) {
+    const variants = merged[key];
+    if (Array.isArray(variants)) {
+      merged[key] = variants.map((item) => normalizeSchema(root, item, seen));
+    }
+  }
+
+  const items = merged.items;
+  if (items && typeof items === "object") {
+    merged.items = normalizeSchema(root, items, seen);
+  }
+
+  return merged;
+}
+
+function resolveRef(
+  root: Record<string, unknown> | undefined,
+  ref: string,
+  seen: Set<string>
+): Record<string, unknown> {
+  if (!root || !ref.startsWith("#/") || seen.has(ref)) return {};
+  seen.add(ref);
+  const parts = ref
+    .slice(2)
+    .split("/")
+    .map((part) => part.replace(/~1/g, "/").replace(/~0/g, "~"));
+  let cursor: unknown = root;
+  for (const part of parts) {
+    cursor = asRecord(cursor)?.[part];
+  }
+  return normalizeSchema(root, cursor, seen);
+}
+
+function mergeDefined(...records: Record<string, unknown>[]): Record<string, unknown> {
+  const output: Record<string, unknown> = {};
+  for (const record of records) {
+    for (const [key, value] of Object.entries(record)) {
+      if (value !== undefined) output[key] = value;
+    }
+  }
+  return output;
+}
+
+function omit(record: Record<string, unknown>, ...keys: string[]): Record<string, unknown> {
+  const blocked = new Set(keys);
+  return Object.fromEntries(Object.entries(record).filter(([key]) => !blocked.has(key)));
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
 }
 
 function typeFor(property: Record<string, unknown>): string | undefined {
-  if (typeof property.type === "string") return property.type;
+  const types = schemaTypes(property).filter((type) => type !== "null");
+  if (types.length === 1) return types[0];
+  if (types.length > 1) return "union";
   if (property.format === "binary") return "file";
-  if (Array.isArray(property.enum)) return "string";
-  if (Array.isArray(property.oneOf)) return "union";
-  if (Array.isArray(property.anyOf)) return "union";
-  if (Array.isArray(property.allOf)) return "object";
+  if (Array.isArray(property.enum)) return enumType(property.enum);
   return undefined;
 }
 
+function schemaTypes(property: Record<string, unknown>): string[] {
+  const direct = property.type;
+  if (typeof direct === "string") return [direct];
+  if (Array.isArray(direct)) return uniqueStrings(direct);
+  if (property.format === "binary") return ["file"];
+  if (Array.isArray(property.enum)) return [enumType(property.enum)];
+
+  const variants = variantSchemas(property);
+  if (variants.length > 0) {
+    return uniqueStrings(variants.flatMap((variant) => schemaTypes(variant)));
+  }
+
+  return [];
+}
+
+function enumType(values: unknown[]): string {
+  const nonNull = values.filter((value) => value !== null);
+  if (nonNull.every((value) => typeof value === "string")) return "string";
+  if (nonNull.every((value) => Number.isInteger(value))) return "integer";
+  if (nonNull.every((value) => typeof value === "number")) return "number";
+  if (nonNull.every((value) => typeof value === "boolean")) return "boolean";
+  return "union";
+}
+
+function variantSchemas(property: Record<string, unknown>): Record<string, unknown>[] {
+  return [...variantsFor(property.oneOf), ...variantsFor(property.anyOf)];
+}
+
+function variantsFor(value: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    const record = asRecord(item);
+    return record ? [record] : [];
+  });
+}
+
+function uniqueStrings(values: unknown[]): string[] {
+  return Array.from(new Set(values.filter((value): value is string => typeof value === "string")));
+}
+
+function isNullable(property: Record<string, unknown>): boolean {
+  const type = property.type;
+  return (
+    property.nullable === true ||
+    (Array.isArray(type) && type.includes("null")) ||
+    variantSchemas(property).some((variant) => schemaTypes(variant).includes("null"))
+  );
+}
+
+function isFileField(
+  root: Record<string, unknown> | undefined,
+  name: string,
+  property: Record<string, unknown>
+): boolean {
+  const type = typeFor(property);
+  if (property.format === "uri" || property.format === "binary" || type === "file") return true;
+  if (type === "array") {
+    return isFileField(root, name, normalizeSchema(root, property.items));
+  }
+  return type === "string" && /(^|_)(file|image|images|audio|video|mask|document)(_|$)/i.test(name);
+}
+
 function matchesFieldType(value: unknown, field: SimplifiedSchemaField): boolean {
-  if (field.file && isDryRunFilePreview(value)) return true;
+  if (field.file && field.type !== "array" && isDryRunFilePreview(value)) return true;
   return matchesType(value, field.type);
 }
 

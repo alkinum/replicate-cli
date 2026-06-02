@@ -216,7 +216,13 @@ export async function createPrediction(
   const bundle = await clientFor(command, !options.dryRun);
   const headers: Record<string, string> = {};
   if (options.sync) headers.Prefer = `wait=${parseWaitSeconds(options.wait, 60)}`;
-  if (options.deadline) headers["Cancel-After"] = options.deadline;
+  if (options.deadline) {
+    const deadlineMs = parseDurationMs(options.deadline);
+    if (deadlineMs !== undefined && deadlineMs < 5000) {
+      throw new CliError("invalid_deadline", "--deadline must be at least 5 seconds.");
+    }
+    headers["Cancel-After"] = options.deadline;
+  }
 
   const body: Record<string, unknown> = {
     input: options.input
@@ -232,12 +238,12 @@ export async function createPrediction(
     const modelRef = options.model ? parseModelRef(options.model) : undefined;
     const versionRef = options.version?.includes("/") ? parseModelRef(options.version) : undefined;
     const ref = modelRef ?? versionRef;
-    throwIfMissing(ref, "model or --version owner/model:version");
-    const version = options.version ?? ref.version;
+    const version = options.version ?? ref?.version;
     if (version) {
       path = "/predictions";
-      body.version = version.includes("/") ? version : `${ref.owner}/${ref.name}:${version}`;
+      body.version = version.includes("/") || !ref ? version : `${ref.owner}/${ref.name}:${version}`;
     } else {
+      throwIfMissing(ref, "model or --version");
       path = `/models/${ref.owner}/${ref.name}/predictions`;
     }
   }
@@ -269,7 +275,12 @@ export async function validatePredictionInput(
   const modelRef = options.model ? parseModelRef(options.model) : undefined;
   const versionRef = options.version?.includes("/") ? parseModelRef(options.version) : undefined;
   const ref = modelRef ?? versionRef;
-  throwIfMissing(ref, "model or --version owner/model:version");
+  if (!ref) {
+    throw new CliError(
+      "schema_validation_unavailable",
+      "Schema validation for a bare version ID requires --model owner/name or --version owner/model:version."
+    );
+  }
   const version = options.version ?? ref.version;
 
   const versionId = version?.includes("/") ? parseModelRef(version).version : version;

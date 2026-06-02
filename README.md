@@ -120,7 +120,7 @@ Files:
 replicate --json files upload ./input.png
 replicate --json files list
 replicate --json files get <file-id>
-replicate --json files download <file-id-or-signed-url> --output ./download.bin
+replicate --json files download '<signed-file-download-url>' --output ./download.bin
 replicate --json files delete <file-id> --confirm
 ```
 

@@ -22,6 +22,7 @@ describe("parse utilities", () => {
   it("parses durations", () => {
     expect(parseDurationMs("1h30m5s")).toBe(5_405_000);
     expect(parseDurationMs("250ms")).toBe(250);
+    expect(() => parseDurationMs("1sfoo")).toThrow("Invalid duration: 1sfoo");
   });
 
   it("validates limit values", () => {
@@ -31,8 +32,9 @@ describe("parse utilities", () => {
     expect(() => parseLimit("abc")).toThrow("--limit must be an integer at least 1.");
   });
 
-  it("allows wait values above 60 seconds", () => {
-    expect(parseWaitSeconds("120")).toBe(120);
-    expect(() => parseWaitSeconds("0")).toThrow("--wait must be an integer at least 1.");
+  it("validates Replicate sync wait range", () => {
+    expect(parseWaitSeconds("60")).toBe(60);
+    expect(() => parseWaitSeconds("0")).toThrow("--wait must be an integer from 1 to 60.");
+    expect(() => parseWaitSeconds("61")).toThrow("--wait must be an integer from 1 to 60.");
   });
 });

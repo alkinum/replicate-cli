@@ -33,10 +33,67 @@ describe("schema simplifier", () => {
     };
 
     expect(simplifyOpenApiSchema(schema)).toMatchObject([
-      { name: "prompt", type: "string", required: true },
+      { name: "prompt", type: "string", required: true, file: false },
       { name: "num_outputs", type: "integer", default: 1, minimum: 1, maximum: 4 },
       { name: "image", type: "string", file: true }
     ]);
+  });
+
+  it("resolves composed refs used by current Replicate model schemas", () => {
+    const schema = {
+      components: {
+        schemas: {
+          Input: {
+            required: ["prompt"],
+            properties: {
+              prompt: {
+                type: "string",
+                description: "A text description of the desired image",
+                "x-order": 0
+              },
+              aspect_ratio: {
+                allOf: [{ $ref: "#/components/schemas/aspect_ratio" }],
+                default: "1:1",
+                "x-order": 1
+              },
+              input_images: {
+                type: "array",
+                items: {
+                  type: "string",
+                  format: "uri"
+                },
+                default: [],
+                "x-order": 2
+              },
+              user_id: {
+                type: "string",
+                nullable: true,
+                "x-order": 3
+              }
+            }
+          },
+          aspect_ratio: {
+            type: "string",
+            enum: ["1:1", "3:2", "2:3"]
+          }
+        }
+      }
+    };
+
+    expect(simplifyOpenApiSchema(schema)).toMatchObject([
+      { name: "prompt", type: "string", file: false },
+      { name: "aspect_ratio", type: "string", enum: ["1:1", "3:2", "2:3"], file: false },
+      { name: "input_images", type: "array", file: true },
+      { name: "user_id", type: "string", nullable: true }
+    ]);
+    expect(
+      validateInputAgainstOpenApiSchema(schema, {
+        prompt: "hello",
+        aspect_ratio: "1:1",
+        input_images: ["https://example.com/image.png"],
+        user_id: null
+      })
+    ).toEqual([]);
   });
 
   it("validates required fields, types, enums, and numeric ranges", () => {
