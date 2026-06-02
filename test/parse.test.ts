@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseDurationMs, parseKeyValues, parseLimit, parseModelRef } from "../src/lib/parse.js";
+import { parseDurationMs, parseKeyValues, parseLimit, parseModelRef, parseWaitSeconds } from "../src/lib/parse.js";
 
 describe("parse utilities", () => {
   it("parses key/value inputs with JSON literals", () => {
@@ -29,5 +29,10 @@ describe("parse utilities", () => {
     expect(() => parseLimit("0")).toThrow("--limit must be an integer at least 1.");
     expect(() => parseLimit("51", { max: 50 })).toThrow("--limit must be an integer from 1 to 50.");
     expect(() => parseLimit("abc")).toThrow("--limit must be an integer at least 1.");
+  });
+
+  it("allows wait values above 60 seconds", () => {
+    expect(parseWaitSeconds("120")).toBe(120);
+    expect(() => parseWaitSeconds("0")).toThrow("--wait must be an integer at least 1.");
   });
 });

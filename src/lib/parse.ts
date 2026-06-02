@@ -131,8 +131,8 @@ export function parseDurationMs(input: string | number | undefined): number | un
 
 export function parseWaitSeconds(value: string | number | undefined, fallback = 60): number {
   const raw = value === undefined ? fallback : Number(value);
-  if (!Number.isInteger(raw) || raw < 1 || raw > 60) {
-    throw new CliError("invalid_wait", "--wait must be an integer from 1 to 60.");
+  if (!Number.isInteger(raw) || raw < 1) {
+    throw new CliError("invalid_wait", "--wait must be an integer at least 1.");
   }
   return raw;
 }

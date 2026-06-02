@@ -16,11 +16,11 @@ export async function waitForResource(options: {
   type: "prediction" | "training";
 }): Promise<Record<string, unknown>> {
   const pollMs = parseDurationMs(options.pollInterval ?? "2s") ?? 2000;
-  const timeoutMs = parseDurationMs(options.timeout ?? "30m") ?? 30 * 60 * 1000;
+  const timeoutMs = parseDurationMs(options.timeout);
   const started = Date.now();
   let last: Record<string, unknown> | undefined;
 
-  while (Date.now() - started <= timeoutMs) {
+  while (timeoutMs === undefined || Date.now() - started <= timeoutMs) {
     last = (await options.client.request("GET", options.path)).data as Record<string, unknown>;
     if (isTerminalStatus(last.status)) {
       if (last.status !== "succeeded") {

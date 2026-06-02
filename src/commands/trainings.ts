@@ -51,7 +51,7 @@ export function registerTrainings(root: Command): void {
       });
     })
   );
-  trainings.command("wait").argument("<id>", "training id").description("wait for a training").option("--poll-interval <duration>", "poll interval", "5s").option("--timeout <duration>", "wait timeout", "2h").option("-o, --output <dir>", "download training output files to directory").action(
+  trainings.command("wait").argument("<id>", "training id").description("wait for a training").option("--poll-interval <duration>", "poll interval", "5s").option("--timeout <duration>", "wait timeout").option("-o, --output <dir>", "download training output files to directory").action(
     action("training", async (command, id: string) => {
       const bundle = await clientFor(command);
       const data = await waitForResource({

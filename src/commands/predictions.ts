@@ -23,7 +23,7 @@ export function registerPredictions(root: Command): void {
     .option("--deployment <owner/name>", "deployment ref")
     .option("--sync", "wait for output using Prefer: wait", true)
     .option("--async", "return immediately after creating prediction")
-    .option("--wait <seconds>", "sync wait seconds, 1-60", "60")
+    .option("--wait <seconds>", "sync wait seconds", "60")
     .option("--deadline <duration>", "Cancel-After duration")
     .option("--webhook <url>", "webhook URL")
     .option("--webhook-events <events>", "comma-separated webhook event filter")
@@ -72,7 +72,7 @@ export function registerPredictions(root: Command): void {
     .option("--version <version>", "version id or owner/model:version")
     .option("--deployment <owner/name>", "deployment ref")
     .option("--sync", "wait for output using Prefer: wait")
-    .option("--wait <seconds>", "sync wait seconds, 1-60", "60")
+    .option("--wait <seconds>", "sync wait seconds", "60")
     .option("--deadline <duration>", "Cancel-After duration")
     .option("--webhook <url>", "webhook URL")
     .option("--webhook-events <events>", "comma-separated webhook event filter")
@@ -139,7 +139,7 @@ export function registerPredictions(root: Command): void {
     })
   );
 
-  predictions.command("wait").argument("<id>", "prediction id").description("wait until a prediction reaches a terminal status").option("--poll-interval <duration>", "poll interval", "2s").option("--timeout <duration>", "wait timeout", "30m").option("-o, --output <dir>", "download output files to directory").action(
+  predictions.command("wait").argument("<id>", "prediction id").description("wait until a prediction reaches a terminal status").option("--poll-interval <duration>", "poll interval", "2s").option("--timeout <duration>", "wait timeout").option("-o, --output <dir>", "download output files to directory").action(
     action("prediction", async (command, id: string) => {
       const bundle = await clientFor(command);
       const data = await waitForResource({
