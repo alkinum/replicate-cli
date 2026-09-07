@@ -7,7 +7,7 @@
 仓库目录当前为空，计划从 `create-typescript-cli@1.0.0` 初始化 TypeScript CLI 项目。开发机器已可用：
 
 - Node.js `v24.11.1`
-- pnpm `10.24.0`
+- pnpm `12.3.4`
 - npm `11.6.4`
 
 本机未发现 `replicate` 命令冲突。CLI 命令名固定为 `replicate`。
