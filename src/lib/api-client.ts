@@ -41,7 +41,7 @@ export class ReplicateHttpClient {
     let body: BodyInit | undefined;
     if (options.formData) {
       body = options.formData;
-    } else if (options.rawBody) {
+    } else if (options.rawBody !== undefined) {
       body = options.rawBody;
     } else if (options.body !== undefined) {
       headers.set("Content-Type", "application/json");
@@ -101,6 +101,13 @@ export class ReplicateHttpClient {
 
   buildUrl(path: string, query?: RequestOptions["query"]): string {
     const url = new URL(path.startsWith("http://") || path.startsWith("https://") ? path : `${this.baseUrl}${path.startsWith("/") ? "" : "/"}${path}`);
+    if (
+      !["http:", "https:"].includes(url.protocol) ||
+      url.origin !== new URL(this.baseUrl).origin ||
+      url.username || url.password
+    ) {
+      throw new CliError("invalid_api_url", "API requests must use the configured base URL's origin.");
+    }
     for (const [key, value] of Object.entries(query ?? {})) {
       if (value !== undefined) url.searchParams.set(key, String(value));
     }
@@ -131,10 +138,6 @@ function sleep(ms: number): Promise<void> {
 
 async function parseResponseBody(response: Response): Promise<unknown> {
   if (response.status === 204) return null;
-  const contentType = response.headers.get("content-type") ?? "";
-  if (contentType.includes("application/json")) {
-    return response.json();
-  }
   const text = await response.text();
   if (text.trim() === "") return null;
   try {

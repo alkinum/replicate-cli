@@ -50,7 +50,13 @@ export function validateInputAgainstOpenApiSchema(
       });
       continue;
     }
-    if (value === undefined || value === null) continue;
+    if (value === undefined) continue;
+    if (value === null) {
+      if (!field.nullable && (field.type !== undefined || field.enum)) {
+        issues.push({ field: field.name, code: "type", message: `${field.name} cannot be null.` });
+      }
+      continue;
+    }
     if (field.enum && !field.enum.includes(value)) {
       issues.push({
         field: field.name,
@@ -177,7 +183,7 @@ function resolveRef(
   seen: Set<string>
 ): Record<string, unknown> {
   if (!root || !ref.startsWith("#/") || seen.has(ref)) return {};
-  seen.add(ref);
+  const nextSeen = new Set(seen).add(ref);
   const parts = ref
     .slice(2)
     .split("/")
@@ -186,7 +192,7 @@ function resolveRef(
   for (const part of parts) {
     cursor = asRecord(cursor)?.[part];
   }
-  return normalizeSchema(root, cursor, seen);
+  return normalizeSchema(root, cursor, nextSeen);
 }
 
 function mergeDefined(...records: Record<string, unknown>[]): Record<string, unknown> {
@@ -214,6 +220,7 @@ function typeFor(property: Record<string, unknown>): string | undefined {
   const types = schemaTypes(property).filter((type) => type !== "null");
   if (types.length === 1) return types[0];
   if (types.length > 1) return "union";
+  if (schemaTypes(property).includes("null")) return "null";
   if (property.format === "binary") return "file";
   if (Array.isArray(property.enum)) return enumType(property.enum);
   return undefined;
@@ -263,6 +270,8 @@ function isNullable(property: Record<string, unknown>): boolean {
   const type = property.type;
   return (
     property.nullable === true ||
+    type === "null" ||
+    (type === undefined && Array.isArray(property.enum) && property.enum.includes(null)) ||
     (Array.isArray(type) && type.includes("null")) ||
     variantSchemas(property).some((variant) => schemaTypes(variant).includes("null"))
   );
@@ -293,6 +302,7 @@ function isDryRunFilePreview(value: unknown): boolean {
 }
 
 function matchesType(value: unknown, type: string | undefined): boolean {
+  if (type === "null") return value === null;
   if (!type || type === "union" || type === "file") return true;
   if (type === "integer") return Number.isInteger(value);
   if (type === "number") return typeof value === "number";

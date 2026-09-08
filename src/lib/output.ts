@@ -31,8 +31,8 @@ export function successEnvelope(
     ok: true,
     type,
     data: redactDeep(data),
-    artifacts: options.artifacts,
-    meta: options.meta
+    artifacts: redactDeep(options.artifacts) as unknown[] | undefined,
+    meta: redactDeep(options.meta) as Record<string, unknown> | undefined
   };
 }
 
@@ -45,12 +45,12 @@ export function errorEnvelope(
     ok: false,
     error: {
       code: cliError.code,
-      message: cliError.message,
+      message: redactDeep(cliError.message) as string,
       status: cliError.status,
       retryAfterSeconds: cliError.retryAfterSeconds,
       details: cliError.details ? redactDeep(cliError.details) : undefined
     },
-    meta
+    meta: redactDeep(meta) as Record<string, unknown> | undefined
   };
 }
 
@@ -60,7 +60,7 @@ export function writeJson(value: unknown): void {
 
 export function writeHuman(value: unknown): void {
   if (typeof value === "string") {
-    process.stdout.write(`${value}\n`);
+    process.stdout.write(`${redactDeep(value)}\n`);
     return;
   }
   process.stdout.write(`${JSON.stringify(redactDeep(value), null, 2)}\n`);
@@ -103,7 +103,7 @@ export async function runWithOutput(
     if (options.json) {
       writeJson(errorEnvelope(cliError, options.meta));
     } else {
-      process.stderr.write(`Error: ${cliError.message}\n`);
+      process.stderr.write(`Error: ${redactDeep(cliError.message)}\n`);
     }
     process.exitCode = cliError.exitCode;
   }

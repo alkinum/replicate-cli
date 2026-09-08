@@ -1,4 +1,5 @@
-import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, posix, resolve, win32 } from "node:path";
 import { z } from "zod";
@@ -70,8 +71,15 @@ export async function writeConfig(
 ): Promise<string> {
   const configPath = resolveConfigPath(path);
   await ensureConfigDirectory(configPath);
-  await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
-  await chmod(configPath, 0o600).catch(() => undefined);
+  const temporaryPath = `${configPath}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(temporaryPath, `${JSON.stringify(config, null, 2)}\n`, {
+      encoding: "utf8", flag: "wx", mode: 0o600
+    });
+    await rename(temporaryPath, configPath);
+  } finally {
+    await rm(temporaryPath, { force: true });
+  }
   return configPath;
 }
 

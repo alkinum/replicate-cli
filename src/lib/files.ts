@@ -1,7 +1,8 @@
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { basename, extname, join, resolve } from "node:path";
-import { CliError } from "./errors.js";
+import { CliError, redactDeep } from "./errors.js";
 import { ReplicateHttpClient } from "./api-client.js";
+import { setDeep } from "./parse.js";
 
 export interface Artifact {
   path: string;
@@ -63,6 +64,7 @@ export async function fileInputValue(
   mode: FileMode,
   options: { metadata?: Record<string, unknown> } = {}
 ): Promise<unknown> {
+  if (!path.trim()) throw new CliError("invalid_input_file", "File path cannot be empty.");
   if (/^https?:\/\//.test(path)) return path;
   const absolute = resolve(path);
   if (mode === "url") {
@@ -92,9 +94,11 @@ export async function applyInputFiles(
     if (index <= 0) throw new CliError("invalid_input_file", `Expected key=path, got: ${item}`);
     const key = item.slice(0, index);
     const path = item.slice(index + 1);
-    next[key] = await fileInputValue(client, path, options.fileMode ?? "auto", {
+    // Validate the key before a local file can be uploaded.
+    setDeep(next, key, undefined);
+    setDeep(next, key, await fileInputValue(client, path, options.fileMode ?? "auto", {
       metadata: options.metadata
-    });
+    }));
   }
   return next;
 }
@@ -105,6 +109,25 @@ export function normalizeFileMode(value: unknown): FileMode {
     return value;
   }
   throw new CliError("invalid_file_mode", `Invalid --file-mode: ${String(value)}. Expected auto, data-url, upload, or url.`);
+}
+
+export function previewFileInput(path: string, mode: FileMode): unknown {
+  if (!path.trim()) throw new CliError("invalid_input_file", "File path cannot be empty.");
+  if (/^https?:\/\//.test(path)) return path;
+  if (mode === "url") {
+    throw new CliError("invalid_file_mode", `Local path cannot be used with --file-mode url: ${path}`);
+  }
+  return { file: resolve(path), mode };
+}
+
+export function downloadHeaders(url: string, token?: string): HeadersInit | undefined {
+  const parsed = new URL(url);
+  const trusted = parsed.protocol === "https:" && (
+    parsed.hostname === "api.replicate.com" ||
+    parsed.hostname === "replicate.delivery" ||
+    parsed.hostname.endsWith(".replicate.delivery")
+  );
+  return trusted && token ? { Authorization: `Bearer ${token}` } : undefined;
 }
 
 export interface DiscoveredUrl {
@@ -146,7 +169,7 @@ export async function downloadArtifacts(options: {
   for (let index = 0; index < urls.length; index += 1) {
     const item = urls[index]!;
     const response = await fetch(item.url, {
-      headers: options.token ? { Authorization: `Bearer ${options.token}` } : undefined,
+      headers: downloadHeaders(item.url, options.token),
       signal: AbortSignal.timeout(options.timeoutMs ?? 120_000)
     });
     if (!response.ok) {
@@ -159,7 +182,7 @@ export async function downloadArtifacts(options: {
     const arrayBuffer = await response.arrayBuffer();
     const bytes = Buffer.from(arrayBuffer);
     const contentType = response.headers.get("content-type") ?? undefined;
-    const filename = `${options.predictionId}-${sanitizePath(item.path)}-${index}${extensionForUrl(item.url, contentType)}`;
+    const filename = `${sanitizePath(options.predictionId)}-${sanitizePath(item.path)}-${index}${extensionForUrl(item.url, contentType)}`;
     const filePath = join(dir, filename);
     await writeFile(filePath, bytes);
     artifacts.push({
@@ -173,13 +196,13 @@ export async function downloadArtifacts(options: {
   await writeFile(
     join(dir, "manifest.json"),
     `${JSON.stringify(
-      {
+      redactDeep({
         predictionId: options.predictionId,
         output: options.output,
         artifacts,
         createdAt: new Date().toISOString(),
         ...(options.manifest ?? {})
-      },
+      }),
       null,
       2
     )}\n`

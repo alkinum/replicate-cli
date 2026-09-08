@@ -11,7 +11,8 @@ import {
   maybeDownloadPredictionOutput,
   metaFor,
   requestPaginated,
-  validatePredictionInput
+  validatePredictionInput,
+  waitTimeout
 } from "./shared.js";
 import { assertConfirm, CliError } from "../lib/errors.js";
 
@@ -72,6 +73,7 @@ export function registerPredictions(root: Command): void {
     .option("--version <version>", "version id or owner/model:version")
     .option("--deployment <owner/name>", "deployment ref")
     .option("--sync", "wait for output using Prefer: wait")
+    .option("--async", "return immediately after creating prediction")
     .option("--wait <seconds>", "sync wait seconds", "60")
     .option("--deadline <duration>", "Cancel-After duration")
     .option("--webhook <url>", "webhook URL")
@@ -96,7 +98,7 @@ export function registerPredictions(root: Command): void {
           version: opts.version,
           deployment: opts.deployment,
           input,
-          sync: opts.sync,
+          sync: opts.sync && !opts.async,
           wait: opts.wait,
           deadline: opts.deadline,
           webhook: opts.webhook,
@@ -146,7 +148,7 @@ export function registerPredictions(root: Command): void {
         client: bundle.client,
         path: `/predictions/${id}`,
         pollInterval: command.opts().pollInterval,
-        timeout: command.opts().timeout,
+        timeout: waitTimeout(command),
         type: "prediction"
       });
       const withArtifacts = await maybeDownloadPredictionOutput(data, {

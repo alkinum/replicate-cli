@@ -43,9 +43,12 @@ export function setDeep(target: Record<string, unknown>, key: string, value: unk
   if (parts.length === 0) {
     throw new CliError("invalid_key", "Input key cannot be empty.");
   }
+  if (parts.some((part) => ["__proto__", "constructor", "prototype"].includes(part))) {
+    throw new CliError("invalid_key", `Unsafe input key: ${key}`);
+  }
   let cursor: Record<string, unknown> = target;
   for (const part of parts.slice(0, -1)) {
-    const existing = cursor[part];
+    const existing = Object.hasOwn(cursor, part) ? cursor[part] : undefined;
     if (!existing || typeof existing !== "object" || Array.isArray(existing)) {
       cursor[part] = {};
     }
@@ -80,11 +83,11 @@ export async function mergeInput(options: {
     throw new CliError("invalid_input_json", "--input-json must contain a JSON object.");
   }
 
-  return {
-    ...base,
-    ...parseKeyValues(options.input),
-    ...parseKeyValues(options.set)
-  };
+  for (const value of [...(options.input ?? []), ...(options.set ?? [])]) {
+    const [key, parsed] = parseKeyValue(value);
+    setDeep(base, key, parsed);
+  }
+  return base;
 }
 
 export function parseModelRef(value: string): ModelRef {

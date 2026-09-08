@@ -2,17 +2,17 @@ import { Command } from "commander";
 import { requireAuth, resolveAuth } from "../lib/auth.js";
 import { ReplicateHttpClient } from "../lib/api-client.js";
 import { CliError } from "../lib/errors.js";
-import { applyInputFiles, downloadArtifacts, normalizeFileMode } from "../lib/files.js";
+import { applyInputFiles, downloadArtifacts, normalizeFileMode, previewFileInput } from "../lib/files.js";
 import { runWithOutput, throwIfMissing } from "../lib/output.js";
 import {
-  absolutePath,
   mergeInput,
   parseDurationMs,
   parseLimit,
   parseModelRef,
   parseOwnerName,
   parseWaitSeconds,
-  readJsonFile
+  readJsonFile,
+  setDeep
 } from "../lib/parse.js";
 import { validateInputAgainstOpenApiSchema } from "../lib/schema.js";
 
@@ -42,6 +42,14 @@ export function globals(command: Command): GlobalOptions {
 
 export function timeoutMs(command: Command): number | undefined {
   return parseDurationMs(globals(command).timeout);
+}
+
+export function waitTimeout(command: Command): string | undefined {
+  // Commander consumes --timeout as a global option even after a subcommand.
+  // Only an explicit value should impose an overall wait deadline.
+  return command.getOptionValueSourceWithGlobals("timeout") === "cli"
+    ? globals(command).timeout
+    : undefined;
 }
 
 export async function clientFor(command: Command, authRequired = true): Promise<ClientBundle> {
@@ -123,10 +131,7 @@ export async function buildInput(
     for (const item of opts.inputFile as string[]) {
       const index = item.indexOf("=");
       if (index <= 0) throw new CliError("invalid_input_file", `Expected key=path, got: ${item}`);
-      preview[item.slice(0, index)] = {
-        file: absolutePath(item.slice(index + 1)),
-        mode: fileMode
-      };
+      setDeep(preview, item.slice(0, index), previewFileInput(item.slice(index + 1), fileMode));
     }
     return preview;
   }
@@ -183,8 +188,13 @@ export async function collectPaginatedResults(
   if (!Array.isArray(first.results) || limit === undefined) return first;
   if (limit <= first.results.length) return { ...first, results: first.results.slice(0, limit) };
   const results = [...first.results];
+  const visited = new Set<string>();
   let next = typeof first.next === "string" ? first.next : undefined;
   while (next && results.length < limit) {
+    if (visited.has(next)) {
+      throw new CliError("pagination_cycle", "The API returned a repeated pagination URL.");
+    }
+    visited.add(next);
     const page = (await client.request("GET", next)).data as Record<string, any>;
     if (!Array.isArray(page.results)) break;
     results.push(...page.results);

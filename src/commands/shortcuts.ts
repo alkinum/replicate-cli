@@ -1,7 +1,6 @@
 import { Command } from "commander";
-import { fileInputValue, normalizeFileMode } from "../lib/files.js";
+import { fileInputValue, normalizeFileMode, previewFileInput } from "../lib/files.js";
 import { asResult } from "../lib/output.js";
-import { absolutePath } from "../lib/parse.js";
 import {
   action,
   addInputOptions,
@@ -46,7 +45,7 @@ export function registerShortcuts(root: Command): void {
       const input = await buildInput(opts, initialBundle.client, opts.dryRun);
       const fileMode = normalizeFileMode(opts.fileMode);
       input.image = opts.dryRun
-        ? { file: absolutePath(opts.image), mode: fileMode }
+        ? previewFileInput(opts.image, fileMode)
         : await fileInputValue(initialBundle.client, opts.image, fileMode);
       if (opts.prompt) input.prompt = opts.prompt;
       await validatePredictionInput(command, {

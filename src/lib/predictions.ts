@@ -16,12 +16,28 @@ export async function waitForResource(options: {
   type: "prediction" | "training";
 }): Promise<Record<string, unknown>> {
   const pollMs = parseDurationMs(options.pollInterval ?? "2s") ?? 2000;
+  if (pollMs <= 0) {
+    throw new CliError("invalid_poll_interval", "--poll-interval must be greater than zero.");
+  }
   const timeoutMs = parseDurationMs(options.timeout);
   const started = Date.now();
   let last: Record<string, unknown> | undefined;
 
-  while (timeoutMs === undefined || Date.now() - started <= timeoutMs) {
-    last = (await options.client.request("GET", options.path)).data as Record<string, unknown>;
+  while (timeoutMs === undefined || Date.now() - started < timeoutMs) {
+    const remaining = timeoutMs === undefined ? undefined : timeoutMs - (Date.now() - started);
+    if (remaining !== undefined && remaining <= 0) break;
+    try {
+      last = (await options.client.request("GET", options.path, remaining === undefined ? {} : {
+        timeoutMs: Math.min(options.client.timeoutMs, remaining),
+        maxRetries: 0
+      })).data as Record<string, unknown>;
+    } catch (error) {
+      if (
+        remaining !== undefined && remaining <= options.client.timeoutMs &&
+        error instanceof CliError && error.code === "network_timeout"
+      ) break;
+      throw error;
+    }
     if (isTerminalStatus(last.status)) {
       if (last.status !== "succeeded") {
         throw new CliError(
@@ -32,7 +48,8 @@ export async function waitForResource(options: {
       }
       return last;
     }
-    await sleep(pollMs);
+    const sleepMs = timeoutMs === undefined ? pollMs : Math.min(pollMs, timeoutMs - (Date.now() - started));
+    if (sleepMs > 0) await sleep(sleepMs);
   }
 
   throw new CliError(

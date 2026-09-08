@@ -4,7 +4,7 @@ import { downloadArtifacts } from "../lib/files.js";
 import { asResult, throwIfMissing } from "../lib/output.js";
 import { parseModelRef } from "../lib/parse.js";
 import { waitForResource } from "../lib/predictions.js";
-import { action, addInputOptions, addWriteSafety, buildInput, clientFor, metaFor, requestPaginated, requestPreview } from "./shared.js";
+import { action, addInputOptions, addWriteSafety, buildInput, clientFor, metaFor, requestPaginated, requestPreview, waitTimeout } from "./shared.js";
 
 export function registerTrainings(root: Command): void {
   const trainings = root.command("trainings").description("training commands");
@@ -58,7 +58,7 @@ export function registerTrainings(root: Command): void {
         client: bundle.client,
         path: `/trainings/${id}`,
         pollInterval: command.opts().pollInterval,
-        timeout: command.opts().timeout,
+        timeout: waitTimeout(command),
         type: "training"
       });
       const artifacts = command.opts().output

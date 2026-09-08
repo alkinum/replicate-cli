@@ -2,7 +2,7 @@ import { Command } from "commander";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { CliError, assertConfirm } from "../lib/errors.js";
-import { uploadFile } from "../lib/files.js";
+import { downloadHeaders, uploadFile } from "../lib/files.js";
 import { asResult } from "../lib/output.js";
 import { readJsonFile } from "../lib/parse.js";
 import { action, clientFor, metaFor, requestPaginated } from "./shared.js";
@@ -42,7 +42,7 @@ export function registerFiles(root: Command): void {
       const bundle = await clientFor(command, false);
       const url = idOrUrl;
       const response = await fetch(url, {
-        headers: bundle.auth.token ? { Authorization: `Bearer ${bundle.auth.token}` } : undefined,
+        headers: downloadHeaders(url, bundle.auth.token),
         signal: AbortSignal.timeout(bundle.timeoutMs ?? 120_000)
       });
       if (!response.ok) {
