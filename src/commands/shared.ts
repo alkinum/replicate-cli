@@ -1,4 +1,5 @@
 import { Command } from "commander";
+import packageJson from "../../package.json" with { type: "json" };
 import { requireAuth, resolveAuth } from "../lib/auth.js";
 import { ReplicateHttpClient } from "../lib/api-client.js";
 import { CliError } from "../lib/errors.js";
@@ -16,7 +17,7 @@ import {
 } from "../lib/parse.js";
 import { validateInputAgainstOpenApiSchema } from "../lib/schema.js";
 
-export const VERSION = "0.1.0";
+export const VERSION = packageJson.version;
 
 export type AnyRecord = Record<string, any>;
 

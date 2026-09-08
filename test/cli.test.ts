@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
+import packageJson from "../package.json" with { type: "json" };
 
 const execFileAsync = promisify(execFile);
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -80,7 +81,7 @@ describe("CLI command contract", () => {
   });
 
   it("keeps root --version while allowing run --version", async () => {
-    await expect(runCli(["--version"])).resolves.toBe("0.1.0\n");
+    await expect(runCli(["--version"])).resolves.toBe(`${packageJson.version}\n`);
 
     const output = JSON.parse(
       await runCli(["--json", "run", "owner/model", "--version", "abc", "--input", "prompt=test", "--dry-run"])

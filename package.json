@@ -1,6 +1,6 @@
 {
   "name": "@alkinum/replicate-cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "AI-first Replicate CLI for model discovery, schema inspection, predictions, artifacts, and resource management.",
   "type": "module",
   "license": "MIT",
@@ -19,6 +19,7 @@
     "skills",
     "docs/assets/readme-banner.svg",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "publishConfig": {
