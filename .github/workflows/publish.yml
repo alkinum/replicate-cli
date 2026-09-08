@@ -1,0 +1,104 @@
+name: Publish to npm
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing stable release tag to publish, such as v0.1.1
+        required: true
+        type: string
+      dry_run:
+        description: Validate and pack without publishing to npm
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-publish-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: >-
+      github.repository == 'alkinum/replicate-cli' &&
+      ((github.event_name == 'release' && !github.event.release.prerelease) ||
+       (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Verify release tag and package metadata
+        id: package
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { appendFileSync, readFileSync } from 'node:fs';
+          const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+          assert.match(process.env.RELEASE_TAG, /^v\d+\.\d+\.\d+$/);
+          assert.equal(process.env.RELEASE_TAG, `v${pkg.version}`);
+          assert.equal(pkg.name, '@alkinum/replicate-cli');
+          assert.equal(pkg.repository.url, 'git+https://github.com/alkinum/replicate-cli.git');
+          appendFileSync(process.env.GITHUB_OUTPUT, `version=${pkg.version}\n`);
+          NODE
+          test "$(git rev-parse HEAD)" = "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")"
+          git merge-base --is-ancestor HEAD origin/main
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Install npm with OIDC support
+        run: npm install --global npm@latest
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm release:check
+      - run: pnpm peers check
+
+      - name: Pack the validated build
+        run: npm pack --ignore-scripts --pack-destination "$RUNNER_TEMP"
+
+      - name: Smoke test the production package
+        env:
+          PACKAGE_VERSION: ${{ steps.package.outputs.version }}
+        run: |
+          npm install --prefix "$RUNNER_TEMP/smoke" --ignore-scripts --omit=dev --no-audit --no-fund \
+            "$RUNNER_TEMP/alkinum-replicate-cli-$PACKAGE_VERSION.tgz"
+          test "$(node "$RUNNER_TEMP/smoke/node_modules/@alkinum/replicate-cli/dist/cli.js" --version)" = "$PACKAGE_VERSION"
+          node "$RUNNER_TEMP/smoke/node_modules/@alkinum/replicate-cli/dist/cli.js" skill print > /dev/null
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: npm-package-${{ steps.package.outputs.version }}
+          path: ${{ runner.temp }}/alkinum-replicate-cli-${{ steps.package.outputs.version }}.tgz
+          if-no-files-found: error
+
+      - name: Preview npm publication
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run
+        env:
+          PACKAGE_VERSION: ${{ steps.package.outputs.version }}
+        run: npm publish "$RUNNER_TEMP/alkinum-replicate-cli-$PACKAGE_VERSION.tgz" --access public --dry-run
+
+      - name: Publish with npm Trusted Publishing
+        if: github.event_name == 'release' || !inputs.dry_run
+        env:
+          PACKAGE_VERSION: ${{ steps.package.outputs.version }}
+        run: npm publish "$RUNNER_TEMP/alkinum-replicate-cli-$PACKAGE_VERSION.tgz" --access public
+
