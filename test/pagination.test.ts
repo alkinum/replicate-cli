@@ -2,6 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 import { collectPaginatedResults, requestPaginated } from "../src/commands/shared.js";
 
 describe("pagination helper", () => {
+  it("stops repeated pagination links even when pages are empty", async () => {
+    const request = vi.fn(async () => ({ data: { next: "/same-page", results: [] } }));
+    await expect(collectPaginatedResults({ request } as any, { next: "/same-page", results: [] }, 5)).rejects.toMatchObject({ code: "pagination_cycle" });
+    expect(request).toHaveBeenCalledOnce();
+  });
+
   it("follows next links until the requested limit is reached", async () => {
     const request = vi.fn(async (_method: string, path: string) => ({
       data:

@@ -2,6 +2,30 @@ import { describe, expect, it } from "vitest";
 import { simplifyOpenApiSchema, validateInputAgainstOpenApiSchema } from "../src/lib/schema.js";
 
 describe("schema simplifier", () => {
+  it("rejects null for non-nullable fields while accepting explicit nullable schemas", () => {
+    const schema = { properties: {
+      prompt: { type: "string" },
+      optional: { type: "integer" },
+      nullable: { type: ["string", "null"] },
+      nullOnly: { type: "null" },
+      composed: { anyOf: [{ type: "string" }, { type: "null" }] }
+    }, required: ["prompt"] };
+    expect(validateInputAgainstOpenApiSchema(schema, {
+      prompt: null, optional: null, nullable: null, nullOnly: null, composed: null
+    })).toMatchObject([{ field: "optional", code: "type" }, { field: "prompt", code: "type" }]);
+  });
+
+  it("resolves sibling uses of a shared ref without treating them as cycles", () => {
+    const schema = { components: { schemas: {
+      Choice: { type: "string", enum: ["fast"] },
+      Input: { properties: { mode: { anyOf: [
+        { type: "array", items: { $ref: "#/components/schemas/Choice" } },
+        { $ref: "#/components/schemas/Choice" }
+      ] } } }
+    } } };
+    expect(simplifyOpenApiSchema(schema)).toMatchObject([{ name: "mode", type: "union" }]);
+  });
+
   it("extracts ordered input fields", () => {
     const schema = {
       components: {

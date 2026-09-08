@@ -1,4 +1,6 @@
 import { execFile } from "node:child_process";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -34,6 +36,49 @@ async function runCliResult(args: string[]) {
 }
 
 describe("CLI command contract", () => {
+  it.each(["predictions", "trainings"])("honors an explicit overall timeout for %s wait", async (group) => {
+    const server = createServer((_request, response) => {
+      response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify({ id: "abc", status: "processing" }));
+    });
+    await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const result = await runCliResult([
+        "--json", "--token", "local-test-token", "--base-url", `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`,
+        group, "wait", "abc", "--timeout", "50ms", "--poll-interval", "60s"
+      ]);
+      expect(result.code).toBe(5);
+      expect(JSON.parse(result.stdout).error.code).toBe(`${group === "predictions" ? "prediction" : "training"}_wait_timeout`);
+    } finally {
+      server.closeAllConnections();
+      await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+    }
+  });
+
+  it.each([
+    ["--json", "unknown-command"],
+    ["--json", "models", "get"],
+    ["run", "--unknown-option", "--json"],
+    ["--json", "files", "download", "https://example.test/a"]
+  ])("reports argument errors as JSON: %j", async (...args) => {
+    const result = await runCliResult(args);
+    expect(result.code).toBe(1);
+    expect(JSON.parse(result.stdout)).toMatchObject({ ok: false, error: { code: "invalid_arguments" } });
+  });
+
+  it("supports the documented explicit async prediction creation", async () => {
+    const result = JSON.parse(await runCli(["--json", "predictions", "create", "--model", "owner/model", "--async", "--dry-run"]));
+    expect(result.data.path).toBe("/models/owner/model/predictions");
+    expect(result.data.headers).not.toHaveProperty("Prefer");
+  });
+
+  it("preserves remote URLs and nested keys in file input previews", async () => {
+    const result = JSON.parse(await runCli([
+      "--json", "run", "owner/model", "--input", "nested.prompt=hello", "--input-file", "nested.image=https://example.test/a.png", "--dry-run"
+    ]));
+    expect(result.data.body.input).toEqual({ nested: { prompt: "hello", image: "https://example.test/a.png" } });
+  });
+
   it("keeps root --version while allowing run --version", async () => {
     await expect(runCli(["--version"])).resolves.toBe("0.1.0\n");
 

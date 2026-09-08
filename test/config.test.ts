@@ -60,6 +60,9 @@ describe("config paths", () => {
     try {
       await writeConfig({ defaultProfile: "default", profiles: {} }, configPath);
       expect((await stat(join(root, "nested"))).isDirectory()).toBe(true);
+      await writeConfig({ defaultProfile: "work", profiles: { work: { token: "private-token" } } }, configPath);
+      expect((await readConfig(configPath)).profiles.work?.token).toBe("private-token");
+      if (process.platform !== "win32") expect((await stat(configPath)).mode & 0o777).toBe(0o600);
     } finally {
       await rm(root, { force: true, recursive: true });
     }
