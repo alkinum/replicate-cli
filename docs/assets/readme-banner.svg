@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420" role="img" aria-labelledby="title desc">
+  <title id="title">Replicate CLI</title>
+  <desc id="desc">Discover models. Inspect inputs. Run predictions. Keep the artifacts. A TypeScript CLI for people and agents.</desc>
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1">
+      <stop stop-color="#0c1424"/>
+      <stop offset="1" stop-color="#182f39"/>
+    </linearGradient>
+    <linearGradient id="accent">
+      <stop stop-color="#a3f3ce"/>
+      <stop offset="1" stop-color="#7dd3fc"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="420" rx="24" fill="url(#bg)"/>
+  <path d="M0 350H1200M960 0V420M1040 0V420M1120 0V420" stroke="#ffffff" stroke-opacity=".04"/>
+  <circle cx="1080" cy="120" r="140" fill="#6ee7b7" opacity=".04"/>
+  <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+    <text x="64" y="76" fill="#a3f3ce" font-size="13" font-weight="600" letter-spacing="3">FROM MODEL TO ARTIFACT</text>
+    <text x="60" y="155" fill="#f8fafc" font-size="64" font-weight="750" letter-spacing="-3">Replicate CLI</text>
+    <text x="64" y="204" fill="#b4c5d4" font-size="20">Discover. Inspect. Run. Download.</text>
+    <text x="64" y="238" fill="#b4c5d4" font-size="20">One terminal workflow for people and agents.</text>
+    <rect x="64" y="286" width="332" height="40" rx="20" fill="#a3f3ce" fill-opacity=".1" stroke="#a3f3ce" stroke-opacity=".2"/>
+    <text x="84" y="312" fill="#a3f3ce" font-size="14">Typed inputs · JSON output · Dry runs</text>
+    <text x="64" y="379" fill="#8097aa" font-size="13">@alkinum/replicate-cli</text>
+  </g>
+  <rect x="650" y="79" width="488" height="261" rx="14" fill="#070f1b" stroke="#304251"/>
+  <path d="M650 120H1138" stroke="#304251"/>
+  <circle cx="674" cy="100" r="5" fill="#ff827b"/>
+  <circle cx="692" cy="100" r="5" fill="#ffd17a"/>
+  <circle cx="710" cy="100" r="5" fill="#a3f3ce"/>
+  <g font-family="'SFMono-Regular', Consolas, monospace" font-size="15">
+    <text x="677" y="157" fill="#a3f3ce">$ replicate --json run owner/model</text>
+    <text x="695" y="186" fill="#b4c5d4">--input prompt="a little wonder"</text>
+    <text x="695" y="215" fill="#b4c5d4">--output ./out</text>
+    <text x="677" y="263" fill="#7dd3fc">"ok": true</text>
+    <text x="677" y="292" fill="#b4c5d4">"type": "prediction"</text>
+    <rect x="677" y="311" width="9" height="3" fill="url(#accent)"/>
+  </g>
+</svg>
