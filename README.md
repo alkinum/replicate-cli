@@ -34,14 +34,16 @@
 
 ## Quick start
 
-Use Node.js **22.13+ on the 22.x line, or 24+**, and **pnpm 12.3.4**. Install the release package:
+Use Node.js **22.13+ on the 22.x line, or 24+**. Install the [npm package](https://www.npmjs.com/package/@alkinum/replicate-cli):
 
 ```bash
-pnpm add --global https://github.com/alkinum/replicate-cli/releases/download/v0.1.1/alkinum-replicate-cli-0.1.1.tgz
+npm install --global @alkinum/replicate-cli
 replicate --help
 ```
 
-See the [release notes](https://github.com/alkinum/replicate-cli/releases/tag/v0.1.1) or [changelog](CHANGELOG.md) for changes. To develop the CLI, install from source:
+Or use `pnpm add --global @alkinum/replicate-cli`. The package name includes the `@alkinum` scope; the command is `replicate`.
+
+See the [release notes](https://github.com/alkinum/replicate-cli/releases/tag/v0.1.1) or [changelog](CHANGELOG.md) for changes. To develop the CLI, install from source with **pnpm 12.3.4**:
 
 ```bash
 git clone https://github.com/alkinum/replicate-cli.git

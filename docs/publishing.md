@@ -4,14 +4,9 @@ The repository uses GitHub Actions and npm Trusted Publishing (OIDC). The publis
 
 ## One-time npm setup
 
-The package must exist on npm before its settings can hold a trusted publisher. `@alkinum/replicate-cli` has not yet been published. A maintainer with access to the `@alkinum` scope must make the first publication interactively. The tested v0.1.1 package is attached to the [GitHub release](https://github.com/alkinum/replicate-cli/releases/tag/v0.1.1):
+The initial public version, `@alkinum/replicate-cli@0.1.1`, was published interactively on 2026-09-09 from the tested [GitHub release](https://github.com/alkinum/replicate-cli/releases/tag/v0.1.1) tarball. The package now exists on npm and can have a trusted publisher configured.
 
-```bash
-npm login
-npm publish https://github.com/alkinum/replicate-cli/releases/download/v0.1.1/alkinum-replicate-cli-0.1.1.tgz --access public
-```
-
-Complete any npm 2FA prompt. Then open the package's **Settings → Trusted publishing**, add **GitHub Actions**, and enter these exact values:
+Open the package's [**Settings → Trusted publishing**](https://www.npmjs.com/package/@alkinum/replicate-cli/access), add **GitHub Actions**, and enter these exact values:
 
 | npm field | Value |
 | --- | --- |
@@ -56,7 +51,7 @@ After the npm trusted publisher is configured, publish an existing, unpublished 
 gh workflow run publish.yml --ref main -f tag=vX.Y.Z -f dry_run=false
 ```
 
-v0.1.1 predates the workflow, so publishing that GitHub Release again will not run the new workflow from its old tag. Manual dispatch loads the workflow from `main` and builds the requested tag. Once the initial v0.1.1 package has been published interactively, use a new version to verify an actual OIDC publication: npm does not allow republishing the same name and version.
+v0.1.1 predates the workflow, so publishing that GitHub Release again will not run the new workflow from its old tag. Manual dispatch loads the workflow from `main` and builds the requested tag. v0.1.1 is already on npm; use a new version to verify an actual OIDC publication, since npm does not allow republishing the same name and version.
 
 A successful dry run verifies packaging and build behavior. It does not verify the npm trust binding; npm performs that exchange only during a live publication. `npm whoami` also does not test OIDC authentication.
 
