@@ -282,6 +282,8 @@ pnpm link:global        # Rebuild and reinstall the local CLI globally
 
 The esbuild override in `pnpm-workspace.yaml` keeps the build and test toolchain on a patched release. Use `pnpm audit` and `pnpm peers check` when updating dependencies.
 
+CI checks Node.js 22, 24, and 26. Stable GitHub Releases publish to npm through GitHub Actions and Trusted Publishing after the one-time npm setup. See the [publishing guide](docs/publishing.md) for the exact trust binding and manual dry-run command.
+
 ## License
 
 [MIT](LICENSE) · An independent community CLI, unaffiliated with Replicate.
