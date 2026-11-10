@@ -3,6 +3,16 @@ import { redactDeep } from "../src/lib/errors.js";
 import { errorEnvelope } from "../src/lib/output.js";
 
 describe("error redaction", () => {
+  it("keeps already masked Replicate tokens readable", () => {
+    const masked = "r8_a...wxyz";
+    expect(redactDeep({ token: masked, redacted: masked })).toEqual({ token: masked, redacted: masked });
+    expect(redactDeep(`Token: ${masked}`)).toBe(`Token: ${masked}`);
+  });
+
+  it("redacts a full token followed by an ellipsis", () => {
+    expect(redactDeep("Rejected r8_abcdefghijklmnopqrstuvwxyz...")).toBe("Rejected r8_a...wxyz...");
+  });
+
   it("redacts every token in error messages without dropping context", () => {
     const first = "r8_abcdefghijklmnopqrstuvwxyz";
     const second = "r8_1234567890abcdefghij";

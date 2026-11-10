@@ -1,13 +1,41 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { applyInputFiles, discoverUrls, downloadArtifacts, downloadHeaders } from "../src/lib/files.js";
+import { applyInputFiles, discoverUrls, downloadArtifacts, downloadHeaders, fetchDownload, fileInputValue } from "../src/lib/files.js";
 import { ReplicateHttpClient } from "../src/lib/api-client.js";
 
 afterEach(() => vi.unstubAllGlobals());
 
 describe("file utilities", () => {
+  it("does not pass bare upload IDs as prediction file inputs", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "replicate-upload-"));
+    const path = join(directory, "file.txt");
+    await writeFile(path, "hello");
+    const client = new ReplicateHttpClient();
+    const request = vi.spyOn(client, "request").mockResolvedValue({ data: { id: "file-id" }, status: 200, headers: new Headers() });
+    try {
+      await expect(fileInputValue(client, path, "upload")).rejects.toMatchObject({ code: "invalid_upload_response" });
+    } finally {
+      request.mockRestore();
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+  it("reports download timeouts and connection errors with network exit codes", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new DOMException("Timed out", "TimeoutError"); }));
+    await expect(fetchDownload("https://example.test/file")).rejects.toMatchObject({ code: "network_timeout", exitCode: 5 });
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new TypeError("fetch failed"); }));
+    await expect(fetchDownload("https://example.test/file")).rejects.toMatchObject({ code: "network_error", exitCode: 5 });
+  });
+
+  it("rejects malformed or credential-bearing download URLs before fetching", async () => {
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    await expect(fetchDownload("http://%%%" )).rejects.toMatchObject({ code: "invalid_download_url" });
+    await expect(fetchDownload("https://user:password@example.test/file" )).rejects.toMatchObject({ code: "invalid_download_url" });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it.each([
     "https://example.test/image.png",
     "https://replicate.delivery.example.test/image.png",

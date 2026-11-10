@@ -2,9 +2,20 @@ import { describe, expect, it } from "vitest";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { mergeInput, parseDurationMs, parseKeyValues, parseLimit, parseModelRef, parseWaitSeconds } from "../src/lib/parse.js";
+import { mergeInput, parseDurationMs, parseKeyValues, parseLimit, parseModelRef, parseWaitSeconds, toQuery } from "../src/lib/parse.js";
 
 describe("parse utilities", () => {
+  it.each(["owner/model:", "owner/model:v1:v2", "owner/..", "owner/model?other=true"])("rejects malformed model references: %s", value => {
+    expect(() => parseModelRef(value)).toThrow();
+  });
+
+  it.each([NaN, Infinity, -1, 2 ** 53, "999999999999999999999h"])("rejects invalid or overflowing durations: %s", value => {
+    expect(() => parseDurationMs(value)).toThrow();
+  });
+
+  it("preserves query strings literally, including leading zeros and equals signs", () => {
+    expect(toQuery(["cursor=00123", "filter={\"x\":1}", "signature=a=b=c"])).toEqual({ cursor: "00123", filter: '{"x":1}', signature: "a=b=c" });
+  });
   it.each(["__proto__.polluted", "constructor.prototype.polluted", "nested.__proto__.polluted"])(
     "rejects unsafe input path %s without modifying prototypes",
     (key) => {
