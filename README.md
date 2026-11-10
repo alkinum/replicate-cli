@@ -59,7 +59,7 @@ Get a token from [Replicate](https://replicate.com/account/api-tokens), then aut
 
 ```bash
 replicate auth set
-replicate --json doctor
+replicate auth status
 ```
 
 Discover a model and inspect its inputs before running it:
@@ -75,9 +75,15 @@ replicate --json run black-forest-labs/flux-schnell \
 
 `run` creates a live prediction and may incur Replicate usage charges. Add `--dry-run` to preview the request. A successful file download writes the artifacts and a `manifest.json` to `./out`.
 
+Without `--json`, commands display readable lists, resource details, request previews, and download locations. Empty lists and additional pages are called out explicitly; narrow terminals use stacked rows to keep identifiers and file paths intact. `outputs print` and `models readme` print their content directly. Raw API responses and `schema --raw` remain JSON or plain text.
+
+`--verbose` writes diagnostic metadata to stderr, keeping stdout usable for JSON or text pipelines.
+
 ## Predictions, at your pace
 
 `run` asks the API to wait up to 60 seconds by default. A response can still be `starting` or `processing`; `--output` downloads files when the prediction has succeeded. Continue a pending prediction with `predictions wait`.
+
+A prediction or training that fails during creation or waiting exits with code `4`. Pending predictions show the command to continue waiting. `outputs download` rejects unfinished or failed predictions; `outputs print` reports an error when output is missing or has been removed.
 
 ```bash
 # Return immediately with a prediction ID.
@@ -181,12 +187,13 @@ replicate --json video generate --model owner/model "a wide establishing shot" -
 replicate --json audio generate --model owner/model --input-json input.json --output ./out
 
 # Preview resource changes.
-replicate --json models create owner/model --visibility private --dry-run
+replicate --json models create owner/model --visibility private --hardware cpu --dry-run
 replicate --json versions delete owner/model:version --dry-run
 replicate --json trainings create owner/model:version \
   --destination owner/new-model --input-json train.json --dry-run
 replicate --json deployments create owner/name \
-  --model owner/model --version <version-id> --hardware <sku> --dry-run
+  --model owner/model --version <version-id> --hardware <sku> \
+  --min-instances 0 --max-instances 2 --dry-run
 
 # Manage existing jobs and resources.
 replicate --json predictions cancel <prediction-id> --confirm
@@ -230,8 +237,8 @@ Add `--json` before or after the command to get a structured success or error en
 | `1` | Invalid arguments, local validation, missing confirmation, or unexpected error |
 | `2` | Missing or rejected authentication |
 | `3` | Replicate API error |
-| `4` | Failed/canceled/aborted job when waiting, or unavailable output |
-| `5` | HTTP timeout, wait timeout, or download HTTP failure |
+| `4` | Failed/canceled/aborted job during creation or waiting, or unavailable output |
+| `5` | Connection failure, HTTP/download timeout, wait timeout, or download HTTP failure |
 
 `--dry-run` previews supported writes. Model, version, deployment, and training management, cancellation, and deletion require `--confirm` for live writes. Prediction creation and file uploads run directly. Raw API requests require `--confirm` except for `GET` and `HEAD`:
 
@@ -240,15 +247,26 @@ replicate --json api GET /account
 replicate --json api POST /predictions --body-json request.json --dry-run
 ```
 
+Raw API previews include `--query` parameters, whose values are preserved literally. Use either `--body` or `--body-json`; `GET` and `HEAD` cannot carry a request body. Malformed JSON, conflicting prediction targets, invalid webhook settings, dates, and scaling values are rejected before requests or input uploads. Deployment creation requires model, version, hardware, and both scaling bounds. Model creation requires hardware and visibility; updates require at least one field. Use `models update owner/model --description '' --confirm` to clear a description.
+
 ### Authentication and profiles
 
 Tokens resolve in this order: **`--token` → `REPLICATE_API_TOKEN` → stored profile**.
 
 ```bash
 replicate auth set --profile work
+replicate auth set "$REPLICATE_API_TOKEN" --profile work
+replicate auth set --token "$REPLICATE_API_TOKEN" --profile work
+replicate auth status --profile work
 replicate --json auth status --profile work
 replicate auth clear --profile work
 ```
+
+`auth set` accepts a positional token, `--token`, or a hidden terminal prompt when neither is supplied. Non-interactive and `--json` calls must supply the token explicitly. Tokens are verified before saving through Replicate's [`GET /v1/account`](https://replicate.com/docs/reference/http#account.get) endpoint; a rejected token, connection failure, or unexpected response leaves the saved config unchanged.
+
+`auth status` verifies the active token and shows its account, source, profile, and masked value. `doctor`, `account get`, and authentication commands use readable terminal output; add `--json` for structured output. A rejected token exits with code `2`; network and API failures are reported separately. `doctor` also returns a nonzero exit code when authentication is missing or verification fails.
+
+For offline use, `auth set <token> --no-verify` saves without validation, and `auth status --offline` shows local configuration without an API request. Both mark the token as unverified. Setting a token always validates the supplied value, even if `REPLICATE_API_TOKEN` is set; an environment token still takes precedence on subsequent commands, and the save output explains this.
 
 Use `REPLICATE_API_TOKEN` in CI. Stored tokens use a local JSON config with owner-only file permissions on Unix. Sensitive fields and Replicate token strings are redacted from CLI output and artifact manifests. Download requests only attach your API token to trusted Replicate HTTPS hosts.
 
@@ -271,7 +289,7 @@ replicate skill install --target ~/.codex/skills/replicate
 
 ## Development
 
-The project uses strict TypeScript 6.x, Commander, tsup, ESLint, and Vitest. `packageManager` pins pnpm to **12.3.4**. TypeScript stays on 6.x for compatibility with the ESLint toolchain.
+The project uses strict TypeScript 6.x, Commander, tsup, ESLint, and Vitest. `packageManager` pins pnpm to **12.3.4**. TypeScript stays on 6.x for compatibility with the ESLint toolchain; tsup stays on 8.x to preserve the supported Node.js minimum.
 
 ```bash
 pnpm install --frozen-lockfile
@@ -282,7 +300,7 @@ pnpm release:dry-run    # Validate and inspect the npm package contents
 pnpm link:global        # Rebuild and reinstall the local CLI globally
 ```
 
-The esbuild override in `pnpm-workspace.yaml` keeps the build and test toolchain on a patched release. Use `pnpm audit` and `pnpm peers check` when updating dependencies.
+The esbuild and minimatch overrides in `pnpm-workspace.yaml` keep the build, test, and lint toolchain on patched releases. Use `pnpm audit` and `pnpm peers check` when updating dependencies.
 
 CI checks Node.js 22, 24, and 26. Stable GitHub Releases publish to npm through GitHub Actions and Trusted Publishing after the one-time npm setup. See the [publishing guide](docs/publishing.md) for the exact trust binding and manual dry-run command.
 

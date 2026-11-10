@@ -21,7 +21,12 @@ Auth order is `--token`, `REPLICATE_API_TOKEN`, then stored config. Never print 
 ```bash
 replicate auth status --json
 replicate auth set --token "$REPLICATE_API_TOKEN"
+replicate auth set "$REPLICATE_API_TOKEN" --profile work
 ```
+
+`auth set` verifies the supplied token with `GET /v1/account` before saving; failed verification preserves existing credentials. `auth status` verifies the active token and returns its account and masked value. Use `auth set <token> --no-verify` or `auth status --offline` only when an offline, unverified result is intended. In non-interactive or JSON mode, supply the token explicitly; the hidden prompt is terminal-only. An environment token continues to override a saved profile. Authentication failures exit with code `2`; `doctor` also exits nonzero on missing authentication or verification failures.
+
+Use `--json` for automation; human output uses tables or details and is not a parsing contract. `outputs print` and `models readme` print content directly in human mode. Creation and wait commands return exit code `4` for failed jobs. Pending predictions need a separate wait command; `outputs download` requires completed output. Invalid targets and webhook options are rejected before uploads. Raw API `--query` values remain literal, and previews include them. Model creation requires hardware and visibility; deployment creation also requires model, version, and min/max instances. Updates require at least one field.
 
 ## Discovery
 
