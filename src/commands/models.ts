@@ -3,6 +3,7 @@ import { ApiError, assertConfirm, CliError } from "../lib/errors.js";
 import { asResult, throwIfMissing } from "../lib/output.js";
 import { parseLimit, parseModelRef, parseOwnerName } from "../lib/parse.js";
 import { simplifyOpenApiSchema } from "../lib/schema.js";
+import { requireBodyFields, validateBodyStrings } from "../lib/validation.js";
 import { action, bodyFromOptions, clientFor, collectPaginatedResults, metaFor, requestPaginated, requestPreview } from "./shared.js";
 
 export function registerModels(root: Command): void {
@@ -153,7 +154,6 @@ function registerSchema(root: Command): void {
 async function modelWrite(command: Command, method: "POST" | "PATCH", value: string, actionName: string): Promise<unknown> {
   const opts = command.opts();
   assertConfirm(opts.confirm, actionName, opts.dryRun);
-  const bundle = await clientFor(command, !opts.dryRun);
   const ref = parseOwnerName(value, "model");
   const body = await bodyFromOptions(
     opts,
@@ -178,6 +178,14 @@ async function modelWrite(command: Command, method: "POST" | "PATCH", value: str
           weights_url: opts.weightsUrl
         }
   );
+  if (method === "POST") {
+    body.owner = ref.owner;
+    body.name = ref.name;
+    requireBodyFields(body, ["hardware", "visibility"]);
+    validateBodyStrings(body, ["hardware", "visibility"]);
+    if (!["public", "private"].includes(String(body.visibility))) throw new CliError("invalid_visibility", "visibility must be public or private.");
+  } else if (!Object.keys(body).length) throw new CliError("empty_update", "Provide at least one model field to update.");
+  const bundle = await clientFor(command, !opts.dryRun);
   const path = method === "POST" ? "/models" : `/models/${ref.owner}/${ref.name}`;
   if (opts.dryRun) return asResult("model", requestPreview(method, path, body), { meta: metaFor(bundle) });
   return asResult("model", (await bundle.client.request(method, path, { body })).data, { meta: metaFor(bundle) });

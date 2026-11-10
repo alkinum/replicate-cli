@@ -1,4 +1,5 @@
 import { CliError, errorFromUnknown, redactDeep } from "./errors.js";
+import { terminalSafe } from "./terminal.js";
 
 export type OutputMode = "json" | "human";
 
@@ -69,13 +70,19 @@ export function writeHuman(value: unknown): void {
 export async function runWithOutput(
   options: {
     json?: boolean;
+    verbose?: boolean;
     type: string;
     meta?: Record<string, unknown>;
+    human?: (result: any) => string;
   },
   handler: () => Promise<unknown>
 ): Promise<void> {
   try {
     const result = await handler();
+    if (options.verbose) {
+      const resultMeta = result && typeof result === "object" && "meta" in result ? result.meta : undefined;
+      process.stderr.write(`Debug: ${JSON.stringify(terminalSafe(redactDeep({ type: options.type, ...options.meta, ...(resultMeta && typeof resultMeta === "object" ? resultMeta : {}) })))}\n`);
+    }
     if (options.json) {
       const envelope =
         result &&
@@ -96,14 +103,14 @@ export async function runWithOutput(
           : successEnvelope(options.type, result, { meta: options.meta });
       writeJson(envelope);
     } else {
-      writeHuman(result);
+      writeHuman(options.human ? options.human(terminalSafe(redactDeep(result))) : result);
     }
   } catch (error) {
     const cliError = errorFromUnknown(error);
     if (options.json) {
       writeJson(errorEnvelope(cliError, options.meta));
     } else {
-      process.stderr.write(`Error: ${redactDeep(cliError.message)}\n`);
+      process.stderr.write(`Error: ${terminalSafe(redactDeep(cliError.message))}\n`);
     }
     process.exitCode = cliError.exitCode;
   }

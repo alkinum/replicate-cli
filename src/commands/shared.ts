@@ -16,6 +16,9 @@ import {
   setDeep
 } from "../lib/parse.js";
 import { validateInputAgainstOpenApiSchema } from "../lib/schema.js";
+import { formatCommandResult } from "../lib/human.js";
+import { validateCommand, webhookOptions } from "../lib/validation.js";
+import { throwIfResourceFailed } from "../lib/predictions.js";
 
 export const VERSION = packageJson.version;
 
@@ -42,7 +45,11 @@ export function globals(command: Command): GlobalOptions {
 }
 
 export function timeoutMs(command: Command): number | undefined {
-  return parseDurationMs(globals(command).timeout);
+  const value = parseDurationMs(globals(command).timeout);
+  if (value !== undefined && (value <= 0 || value > 2_147_483_647)) {
+    throw new CliError("invalid_duration", "--timeout must be greater than zero and at most 2147483647ms.");
+  }
+  return value;
 }
 
 export function waitTimeout(command: Command): string | undefined {
@@ -81,7 +88,8 @@ export function metaFor(bundle?: ClientBundle): Record<string, unknown> {
 
 export function action(
   type: string,
-  handler: (command: Command, ...args: any[]) => Promise<unknown>
+  handler: (command: Command, ...args: any[]) => Promise<unknown>,
+  human?: (result: any) => string
 ): (...args: any[]) => Promise<void> {
   return async (...args: any[]) => {
     const command = args[args.length - 1] as Command;
@@ -89,10 +97,21 @@ export function action(
     await runWithOutput(
       {
         json: opts.json,
+        verbose: opts.verbose,
         type,
-        meta: { cliVersion: VERSION }
+        meta: { cliVersion: VERSION },
+        human: human ?? ((result) => formatCommandResult(type, result, {
+          operation: command.name(),
+          output: command.opts().output,
+          target: command.args[0],
+          raw: command.opts().raw,
+          dryRun: command.opts().dryRun
+        }))
       },
-      () => handler(command, ...args.slice(0, -1))
+      async () => {
+        validateCommand(command);
+        return handler(command, ...args.slice(0, -1));
+      }
     );
   };
 }
@@ -127,18 +146,19 @@ export async function buildInput(
     inputJson: opts.inputJson
   });
   const fileMode = normalizeFileMode(opts.fileMode);
-  if (dryRun && Array.isArray(opts.inputFile)) {
-    const preview = { ...input };
+  if (Array.isArray(opts.inputFile)) {
+    const preview = structuredClone(input);
     for (const item of opts.inputFile as string[]) {
       const index = item.indexOf("=");
       if (index <= 0) throw new CliError("invalid_input_file", `Expected key=path, got: ${item}`);
       setDeep(preview, item.slice(0, index), previewFileInput(item.slice(index + 1), fileMode));
     }
-    return preview;
+    if (dryRun) return preview;
   }
   const metadata = opts.metadataJson
     ? ((await readJsonFile(opts.metadataJson)) as Record<string, unknown>)
     : undefined;
+  if (metadata !== undefined && (!metadata || typeof metadata !== "object" || Array.isArray(metadata))) throw new CliError("invalid_metadata", "--metadata-json must contain a JSON object.");
   return applyInputFiles(client, input, opts.inputFile, {
     fileMode,
     metadata
@@ -156,16 +176,17 @@ export async function bodyFromOptions(
     }
     return body as Record<string, unknown>;
   }
-  return Object.fromEntries(Object.entries(fallback).filter(([, value]) => value !== undefined && value !== ""));
+  return Object.fromEntries(Object.entries(fallback).filter(([, value]) => value !== undefined));
 }
 
 export function requestPreview(
   method: string,
   path: string,
   body?: unknown,
-  headers?: Record<string, string>
+  headers?: Record<string, string>,
+  query?: Record<string, string>
 ): unknown {
-  return { method, path, headers, body };
+  return { method, path, headers, body, ...(query && Object.keys(query).length ? { query } : {}) };
 }
 
 export async function requestPaginated(
@@ -239,7 +260,7 @@ export async function createPrediction(
     input: options.input
   };
   if (options.webhook) body.webhook = options.webhook;
-  if (options.webhookEvents) body.webhook_events_filter = options.webhookEvents.split(",").map((item) => item.trim());
+  if (options.webhookEvents) body.webhook_events_filter = webhookOptions(options.webhook, options.webhookEvents);
 
   let path: string;
   if (options.deployment) {
@@ -298,7 +319,7 @@ export async function validatePredictionInput(
   const data = versionId
     ? ((await bundle.client.request("GET", `/models/${ref.owner}/${ref.name}/versions/${versionId}`)).data as Record<string, any>)
     : ((await bundle.client.request("GET", `/models/${ref.owner}/${ref.name}`)).data as Record<string, any>);
-  const openapi = version ? data.openapi_schema : data.latest_version?.openapi_schema;
+  const openapi = versionId ? data.openapi_schema : data.latest_version?.openapi_schema;
   if (!openapi) {
     throw new CliError("schema_missing", "Model schema is not available.", { details: data });
   }
@@ -315,6 +336,7 @@ export async function maybeDownloadPredictionOutput(
   data: unknown,
   options: { output?: string; bundle: ClientBundle; manifest?: Record<string, unknown> }
 ): Promise<{ data: unknown; artifacts?: unknown[] }> {
+  if (data && typeof data === "object") throwIfResourceFailed(data as Record<string, unknown>, "prediction");
   if (!options.output || !data || typeof data !== "object") {
     return { data };
   }

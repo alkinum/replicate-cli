@@ -90,6 +90,7 @@ export class ReplicateHttpClient {
           await sleep(retryDelayMs(attempt));
           continue;
         }
+        if (retryableNetworkError(error)) throw new CliError("network_error", `Could not connect to the API: ${method} ${url}. Check your connection and --base-url.`, { exitCode: 5, cause: error });
         throw error;
       } finally {
         clearTimeout(timeout);
@@ -100,11 +101,16 @@ export class ReplicateHttpClient {
   }
 
   buildUrl(path: string, query?: RequestOptions["query"]): string {
-    const url = new URL(path.startsWith("http://") || path.startsWith("https://") ? path : `${this.baseUrl}${path.startsWith("/") ? "" : "/"}${path}`);
+    let url: URL;
+    let base: URL;
+    try {
+      base = new URL(this.baseUrl);
+      url = new URL(path.startsWith("http://") || path.startsWith("https://") ? path : `${this.baseUrl}${path.startsWith("/") ? "" : "/"}${path}`);
+    } catch { throw new CliError("invalid_api_url", "Provide a valid HTTP(S) --base-url and API path."); }
     if (
       !["http:", "https:"].includes(url.protocol) ||
-      url.origin !== new URL(this.baseUrl).origin ||
-      url.username || url.password
+      url.origin !== base.origin ||
+      url.username || url.password || base.search || base.hash || url.hash
     ) {
       throw new CliError("invalid_api_url", "API requests must use the configured base URL's origin.");
     }

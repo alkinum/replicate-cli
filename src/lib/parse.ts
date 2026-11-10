@@ -15,14 +15,16 @@ export function parseJsonLiteral(value: string): unknown {
     return JSON.parse(trimmed.toLowerCase());
   }
   if (/^-?(0|[1-9]\d*)(\.\d+)?([eE][+-]?\d+)?$/.test(trimmed)) {
-    return Number(trimmed);
+    const parsed = Number(trimmed);
+    if (!Number.isFinite(parsed)) throw new CliError("invalid_input", "Numeric inputs must be finite.");
+    return parsed;
   }
   if (
     (trimmed.startsWith("{") && trimmed.endsWith("}")) ||
     (trimmed.startsWith("[") && trimmed.endsWith("]")) ||
     (trimmed.startsWith('"') && trimmed.endsWith('"'))
   ) {
-    return JSON.parse(trimmed);
+    return parseJson(trimmed, "Input value");
   }
   return value;
 }
@@ -67,8 +69,23 @@ export function parseKeyValues(values?: string[]): Record<string, unknown> {
 }
 
 export async function readJsonFile<T = unknown>(path: string): Promise<T> {
-  const raw = await readFile(resolve(path), "utf8");
-  return JSON.parse(raw) as T;
+  const absolute = resolve(path);
+  let raw: string;
+  try { raw = await readFile(absolute, "utf8"); } catch (error) {
+    throw new CliError("file_read_failed", `Cannot read JSON file: ${absolute}`, { cause: error });
+  }
+  return parseJson(raw, `JSON file ${absolute}`) as T;
+}
+
+export function parseJson(value: string, label = "JSON"): unknown {
+  try { return JSON.parse(value); } catch {
+    throw new CliError("invalid_json", `${label} is not valid JSON. Check quoting, commas, and brackets.`);
+  }
+}
+
+export function validatePathSegment(value: string, label: string): string {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value)) throw new CliError("invalid_resource_ref", `Invalid ${label}: expected a name or ID without slashes, whitespace, or URL query characters.`);
+  return value;
 }
 
 export async function mergeInput(options: {
@@ -91,11 +108,15 @@ export async function mergeInput(options: {
 }
 
 export function parseModelRef(value: string): ModelRef {
+  if (value.split(":").length > 2 || value.endsWith(":")) throw new CliError("invalid_model_ref", "Expected owner/model or owner/model:version with a non-empty version.");
   const [modelPart, version] = value.split(":", 2);
   const parts = modelPart?.split("/") ?? [];
   if (parts.length !== 2 || !parts[0] || !parts[1]) {
     throw new CliError("invalid_model_ref", `Expected owner/model or owner/model:version, got: ${value}`);
   }
+  validatePathSegment(parts[0], "model owner");
+  validatePathSegment(parts[1], "model name");
+  if (version !== undefined) validatePathSegment(version, "model version");
   return { owner: parts[0], name: parts[1], version };
 }
 
@@ -104,14 +125,18 @@ export function parseOwnerName(value: string, label = "resource"): { owner: stri
   if (parts.length !== 2 || !parts[0] || !parts[1]) {
     throw new CliError("invalid_resource_ref", `Expected owner/name for ${label}, got: ${value}`);
   }
-  return { owner: parts[0], name: parts[1] };
+  return { owner: validatePathSegment(parts[0], `${label} owner`), name: validatePathSegment(parts[1], `${label} name`) };
 }
 
 export function parseDurationMs(input: string | number | undefined): number | undefined {
   if (input === undefined) return undefined;
-  if (typeof input === "number") return input;
+  const checked = (value: number) => {
+    if (!Number.isSafeInteger(value) || value < 0) throw new CliError("invalid_duration", "Duration must be a finite, non-negative number of milliseconds.");
+    return value;
+  };
+  if (typeof input === "number") return checked(input);
   const value = input.trim();
-  if (/^\d+$/.test(value)) return Number(value) * 1000;
+  if (/^\d+$/.test(value)) return checked(Number(value) * 1000);
   const matches = [...value.matchAll(/(\d+)(ms|h|m|s)/g)];
   if (matches.length === 0) {
     throw new CliError("invalid_duration", `Invalid duration: ${input}`);
@@ -137,7 +162,7 @@ export function parseDurationMs(input: string | number | undefined): number | un
   if (cursor !== value.length) {
     throw new CliError("invalid_duration", `Invalid duration: ${input}`);
   }
-  return total;
+  return checked(total);
 }
 
 export function parseWaitSeconds(value: string | number | undefined, fallback = 60): number {
@@ -155,7 +180,7 @@ export function parseLimit(
   if (value === undefined) return undefined;
   const min = options.min ?? 1;
   const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < min || (options.max !== undefined && parsed > options.max)) {
+  if (!Number.isSafeInteger(parsed) || parsed < min || (options.max !== undefined && parsed > options.max)) {
     const range = options.max === undefined ? `at least ${min}` : `from ${min} to ${options.max}`;
     throw new CliError("invalid_limit", `--limit must be an integer ${range}.`);
   }
@@ -163,10 +188,12 @@ export function parseLimit(
 }
 
 export function toQuery(values?: string[]): Record<string, string> {
-  const output: Record<string, string> = {};
+  const output: Record<string, string> = Object.create(null);
   for (const value of values ?? []) {
-    const [key, parsed] = parseKeyValue(value);
-    output[key] = String(parsed);
+    const index = value.indexOf("=");
+    const key = value.slice(0, index).trim();
+    if (index <= 0 || !key) throw new CliError("invalid_key_value", "Query parameters must use key=value.");
+    output[key] = value.slice(index + 1);
   }
   return output;
 }

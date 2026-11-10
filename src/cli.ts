@@ -4,6 +4,7 @@ import { registerCommands } from "./commands/index.js";
 import { VERSION } from "./commands/shared.js";
 import { CliError, errorFromUnknown, redactDeep } from "./lib/errors.js";
 import { errorEnvelope, writeJson } from "./lib/output.js";
+import { terminalSafe } from "./lib/terminal.js";
 
 const program = new Command();
 const argv = process.argv.slice(2);
@@ -17,7 +18,7 @@ if (argv.length === 1 && argv[0] === "--version") {
 program
   .exitOverride()
   .configureOutput({
-    writeErr: (message) => { if (!json) process.stderr.write(String(redactDeep(message))); }
+    writeErr: (message) => { if (!json) process.stderr.write(String(terminalSafe(redactDeep(message)))); }
   })
   .name("replicate")
   .description("AI-first Replicate CLI")
@@ -44,6 +45,6 @@ try {
     const cliError = errorFromUnknown(error);
     process.exitCode = cliError.exitCode;
     if (json) writeJson(errorEnvelope(cliError, { cliVersion: VERSION }));
-    else process.stderr.write(`Error: ${redactDeep(cliError.message)}\n`);
+    else process.stderr.write(`Error: ${terminalSafe(redactDeep(cliError.message))}\n`);
   }
 }

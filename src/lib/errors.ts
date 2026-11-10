@@ -97,7 +97,10 @@ export function redactSecret(value: string): string {
 
 export function redactDeep(value: unknown): unknown {
   if (typeof value === "string") {
-    return value.replace(/r8_[A-Za-z0-9]+/g, redactSecret);
+    return value.replace(
+      /(r8_[A-Za-z0-9]\.\.\.[A-Za-z0-9]{4})|r8_[A-Za-z0-9]+/g,
+      (match, masked: string | undefined) => masked ?? redactSecret(match)
+    );
   }
 
   if (Array.isArray(value)) {

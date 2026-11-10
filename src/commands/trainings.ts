@@ -3,7 +3,8 @@ import { assertConfirm } from "../lib/errors.js";
 import { downloadArtifacts } from "../lib/files.js";
 import { asResult, throwIfMissing } from "../lib/output.js";
 import { parseModelRef } from "../lib/parse.js";
-import { waitForResource } from "../lib/predictions.js";
+import { throwIfResourceFailed, waitForResource } from "../lib/predictions.js";
+import { webhookOptions } from "../lib/validation.js";
 import { action, addInputOptions, addWriteSafety, buildInput, clientFor, metaFor, requestPaginated, requestPreview, waitTimeout } from "./shared.js";
 
 export function registerTrainings(root: Command): void {
@@ -27,11 +28,13 @@ export function registerTrainings(root: Command): void {
           input,
           destination: opts.destination,
           webhook: opts.webhook,
-          webhook_events_filter: opts.webhookEvents?.split(",").map((item: string) => item.trim())
+          webhook_events_filter: webhookOptions(opts.webhook, opts.webhookEvents)
         };
         const path = `/models/${ref.owner}/${ref.name}/versions/${ref.version}/trainings`;
         if (opts.dryRun) return asResult("training", requestPreview("POST", path, body), { meta: metaFor(bundle) });
-        return asResult("training", (await bundle.client.request("POST", path, { body })).data, {
+        const data = (await bundle.client.request("POST", path, { body })).data as Record<string, unknown>;
+        throwIfResourceFailed(data, "training");
+        return asResult("training", data, {
           meta: metaFor(bundle)
         });
       })

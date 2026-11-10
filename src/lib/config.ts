@@ -3,6 +3,7 @@ import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, posix, resolve, win32 } from "node:path";
 import { z } from "zod";
+import { CliError } from "./errors.js";
 
 const ProfileSchema = z.object({
   token: z.string().optional()
@@ -88,7 +89,9 @@ export async function deleteConfig(path?: string): Promise<void> {
 }
 
 export function profileName(config: ReplicateCliConfig, explicit?: string): string {
-  return explicit ?? config.defaultProfile ?? "default";
+  const name = explicit ?? config.defaultProfile ?? "default";
+  if (!name.trim() || ["__proto__", "constructor", "prototype"].includes(name)) throw new CliError("invalid_profile", "Choose a non-empty profile name other than __proto__, constructor, or prototype.");
+  return name;
 }
 
 async function ensureConfigDirectory(configPath: string): Promise<void> {

@@ -1,6 +1,8 @@
 import { Command } from "commander";
 import { assertConfirm } from "../lib/errors.js";
 import { asResult } from "../lib/output.js";
+import { CliError } from "../lib/errors.js";
+import { requireBodyFields, validateBodyStrings, validateScaling } from "../lib/validation.js";
 import { parseOwnerName } from "../lib/parse.js";
 import { action, bodyFromOptions, clientFor, metaFor, requestPaginated, requestPreview } from "./shared.js";
 
@@ -44,12 +46,11 @@ export function registerDeployments(root: Command): void {
 async function deploymentWrite(command: Command, method: "POST" | "PATCH", refValue: string, actionName: string): Promise<unknown> {
   const opts = command.opts();
   assertConfirm(opts.confirm, actionName, opts.dryRun);
-  const bundle = await clientFor(command, !opts.dryRun);
   const ref = parseOwnerName(refValue, "deployment");
   const scaling = {
     hardware: opts.hardware,
-    min_instances: opts.minInstances === undefined ? undefined : Number(opts.minInstances),
-    max_instances: opts.maxInstances === undefined ? undefined : Number(opts.maxInstances)
+    min_instances: opts.minInstances === undefined ? undefined : opts.minInstances.trim() ? Number(opts.minInstances) : NaN,
+    max_instances: opts.maxInstances === undefined ? undefined : opts.maxInstances.trim() ? Number(opts.maxInstances) : NaN
   };
   const body = await bodyFromOptions(
     opts,
@@ -65,6 +66,14 @@ async function deploymentWrite(command: Command, method: "POST" | "PATCH", refVa
           ...scaling
         }
   );
+  validateScaling(body);
+  validateBodyStrings(body, ["model", "version", "hardware"]);
+  if (method === "POST") {
+    body.name = ref.name;
+    requireBodyFields(body, ["model", "version", "hardware", "min_instances", "max_instances"]);
+  } else if (!Object.keys(body).length) throw new CliError("empty_update", "Provide at least one deployment field to update.");
+  if (body.model !== undefined) parseOwnerName(String(body.model), "model");
+  const bundle = await clientFor(command, !opts.dryRun);
   const path = method === "POST" ? "/deployments" : `/deployments/${ref.owner}/${ref.name}`;
   if (opts.dryRun) return asResult("deployment", requestPreview(method, path, body), { meta: metaFor(bundle) });
   return asResult("deployment", (await bundle.client.request(method, path, { body })).data, { meta: metaFor(bundle) });

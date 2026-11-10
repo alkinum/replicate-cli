@@ -8,6 +8,12 @@ export function isTerminalStatus(status: unknown): status is TerminalStatus {
   return status === "succeeded" || status === "failed" || status === "canceled" || status === "aborted";
 }
 
+export function throwIfResourceFailed(resource: Record<string, unknown>, type: "prediction" | "training"): void {
+  if (isTerminalStatus(resource.status) && resource.status !== "succeeded") {
+    throw new CliError(`${type}_${resource.status}`, `${type} ${String(resource.id ?? "")} ${resource.status}: ${String(resource.error ?? "no error message")}`, { exitCode: 4, details: resource });
+  }
+}
+
 export async function waitForResource(options: {
   client: ReplicateHttpClient;
   path: string;
@@ -16,8 +22,8 @@ export async function waitForResource(options: {
   type: "prediction" | "training";
 }): Promise<Record<string, unknown>> {
   const pollMs = parseDurationMs(options.pollInterval ?? "2s") ?? 2000;
-  if (pollMs <= 0) {
-    throw new CliError("invalid_poll_interval", "--poll-interval must be greater than zero.");
+  if (pollMs <= 0 || pollMs > 2_147_483_647) {
+    throw new CliError("invalid_poll_interval", "--poll-interval must be greater than zero and at most 2147483647ms.");
   }
   const timeoutMs = parseDurationMs(options.timeout);
   const started = Date.now();
@@ -39,13 +45,7 @@ export async function waitForResource(options: {
       throw error;
     }
     if (isTerminalStatus(last.status)) {
-      if (last.status !== "succeeded") {
-        throw new CliError(
-          `${options.type}_${last.status}`,
-          `${options.type} ${String(last.id ?? "")} ${last.status}: ${String(last.error ?? "no error message")}`,
-          { exitCode: 4, details: last }
-        );
-      }
+      throwIfResourceFailed(last, options.type);
       return last;
     }
     const sleepMs = timeoutMs === undefined ? pollMs : Math.min(pollMs, timeoutMs - (Date.now() - started));

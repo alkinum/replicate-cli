@@ -2,7 +2,7 @@ import { Command } from "commander";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { CliError, assertConfirm } from "../lib/errors.js";
-import { downloadHeaders, uploadFile } from "../lib/files.js";
+import { fetchDownload, uploadFile } from "../lib/files.js";
 import { asResult } from "../lib/output.js";
 import { readJsonFile } from "../lib/parse.js";
 import { action, clientFor, metaFor, requestPaginated } from "./shared.js";
@@ -22,6 +22,7 @@ export function registerFiles(root: Command): void {
       const metadata = command.opts().metadataJson
         ? ((await readJsonFile(command.opts().metadataJson)) as Record<string, unknown>)
         : undefined;
+      if (metadata !== undefined && (!metadata || typeof metadata !== "object" || Array.isArray(metadata))) throw new CliError("invalid_metadata", "--metadata-json must contain a JSON object.");
       return asResult("file", await uploadFile(bundle.client, path, { metadata }), { meta: metaFor(bundle) });
     })
   );
@@ -41,17 +42,7 @@ export function registerFiles(root: Command): void {
       }
       const bundle = await clientFor(command, false);
       const url = idOrUrl;
-      const response = await fetch(url, {
-        headers: downloadHeaders(url, bundle.auth.token),
-        signal: AbortSignal.timeout(bundle.timeoutMs ?? 120_000)
-      });
-      if (!response.ok) {
-        throw new CliError("file_download_failed", `Failed to download file: HTTP ${response.status}`, {
-          status: response.status,
-          exitCode: 5
-        });
-      }
-      const bytes = Buffer.from(await response.arrayBuffer());
+      const { bytes, contentType } = await fetchDownload(url, { token: bundle.auth.token, timeoutMs: bundle.timeoutMs });
       const outputPath = resolve(command.opts().output);
       await mkdir(dirname(outputPath), { recursive: true });
       await writeFile(outputPath, bytes);
@@ -60,7 +51,7 @@ export function registerFiles(root: Command): void {
         {
           path: outputPath,
           bytes: bytes.byteLength,
-          contentType: response.headers.get("content-type")
+          contentType
         },
         { meta: metaFor(bundle) }
       );

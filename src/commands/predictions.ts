@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import { downloadArtifacts } from "../lib/files.js";
 import { asResult } from "../lib/output.js";
-import { waitForResource } from "../lib/predictions.js";
+import { throwIfResourceFailed, waitForResource } from "../lib/predictions.js";
 import {
   action,
   addInputOptions,
@@ -180,6 +180,8 @@ export function registerOutputs(root: Command): void {
     action("artifacts", async (command, id: string) => {
       const bundle = await clientFor(command);
       const prediction = (await bundle.client.request("GET", `/predictions/${id}`)).data as Record<string, any>;
+      throwIfResourceFailed(prediction, "prediction");
+      if (prediction.status && prediction.status !== "succeeded") throw new CliError("prediction_output_not_ready", `Prediction ${id} is ${prediction.status}. Run \`replicate predictions wait ${id} --output <dir>\` to download it when complete.`, { exitCode: 4 });
       if (prediction.data_removed || prediction.output === undefined || prediction.output === null) {
         throw new CliError(
           "prediction_output_unavailable",
@@ -203,6 +205,7 @@ export function registerOutputs(root: Command): void {
     action("output", async (command, id: string) => {
       const bundle = await clientFor(command);
       const prediction = (await bundle.client.request("GET", `/predictions/${id}`)).data as Record<string, any>;
+      if (prediction.data_removed || prediction.output === undefined || prediction.output === null) throw new CliError("prediction_output_unavailable", `No output is available for prediction ${id} (status: ${String(prediction.status ?? "unknown")}). Use \`replicate predictions get ${id}\` to inspect it.`, { exitCode: 4 });
       return asResult("output", prediction.output, { meta: metaFor(bundle) });
     })
   );

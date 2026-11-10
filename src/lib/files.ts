@@ -76,7 +76,9 @@ export async function fileInputValue(
   }
   const response = (await uploadFile(client, absolute, options)) as Record<string, unknown>;
   const urls = response.urls as Record<string, unknown> | undefined;
-  return urls?.get ?? response.url ?? response.id;
+  const url = urls?.get ?? response.url;
+  if (typeof url !== "string" || !/^https?:\/\//.test(url)) throw new CliError("invalid_upload_response", "The file upload did not return a download URL; a prediction was not created.");
+  return url;
 }
 
 export async function applyInputFiles(
@@ -130,6 +132,24 @@ export function downloadHeaders(url: string, token?: string): HeadersInit | unde
   return trusted && token ? { Authorization: `Bearer ${token}` } : undefined;
 }
 
+export async function fetchDownload(
+  url: string,
+  options: { token?: string; timeoutMs?: number; errorCode?: string } = {}
+): Promise<{ bytes: Buffer; contentType?: string }> {
+  let parsed: URL;
+  try { parsed = new URL(url); } catch { throw new CliError("invalid_download_url", "Provide a valid HTTP(S) download URL."); }
+  if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password) throw new CliError("invalid_download_url", "Download URLs must use HTTP(S) without embedded credentials.");
+  try {
+    const response = await fetch(url, { headers: downloadHeaders(url, options.token), signal: AbortSignal.timeout(options.timeoutMs ?? 120_000) });
+    if (!response.ok) throw new CliError(options.errorCode ?? "file_download_failed", `Download failed: HTTP ${response.status}.`, { status: response.status, exitCode: 5 });
+    return { bytes: Buffer.from(await response.arrayBuffer()), contentType: response.headers.get("content-type") ?? undefined };
+  } catch (error) {
+    if (error instanceof CliError) throw error;
+    const timedOut = error instanceof Error && ["AbortError", "TimeoutError"].includes(error.name);
+    throw new CliError(timedOut ? "network_timeout" : "network_error", timedOut ? "Download timed out. Increase --timeout and try again." : "Could not download the file. Check your connection and download URL.", { exitCode: 5, cause: error });
+  }
+}
+
 export interface DiscoveredUrl {
   path: string;
   url: string;
@@ -168,20 +188,7 @@ export async function downloadArtifacts(options: {
   const artifacts: Artifact[] = [];
   for (let index = 0; index < urls.length; index += 1) {
     const item = urls[index]!;
-    const response = await fetch(item.url, {
-      headers: downloadHeaders(item.url, options.token),
-      signal: AbortSignal.timeout(options.timeoutMs ?? 120_000)
-    });
-    if (!response.ok) {
-      throw new CliError(
-        "artifact_download_failed",
-        `Failed to download ${item.url}: HTTP ${response.status}`,
-        { exitCode: 5, status: response.status }
-      );
-    }
-    const arrayBuffer = await response.arrayBuffer();
-    const bytes = Buffer.from(arrayBuffer);
-    const contentType = response.headers.get("content-type") ?? undefined;
+    const { bytes, contentType } = await fetchDownload(item.url, { token: options.token, timeoutMs: options.timeoutMs, errorCode: "artifact_download_failed" });
     const filename = `${sanitizePath(options.predictionId)}-${sanitizePath(item.path)}-${index}${extensionForUrl(item.url, contentType)}`;
     const filePath = join(dir, filename);
     await writeFile(filePath, bytes);
