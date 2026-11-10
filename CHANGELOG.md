@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.2.0 — 2026-11-11
+
+### Added
+
+- Accept a positional token in `auth set`, alongside `--token` and the hidden interactive prompt.
+- Verify tokens with the account API before saving and when checking authentication status; provide `--no-verify` and `--offline` for offline use.
+
+### Changed
+
+- Show readable authentication, account, and diagnostic output while preserving structured `--json` output.
+- Explain environment token precedence, reject missing tokens in non-interactive setup, and leave saved credentials unchanged when verification fails.
+- Return a nonzero diagnostic exit code for missing or failed authentication and distinguish API reachability from token validity.
+- Update compatible dependencies, retaining TypeScript 6.x for ESLint compatibility and tsup 8.x for the supported Node.js minimum.
+- Refresh transitive dependencies and override minimatch to its patched release.
+- Extend readable output to discovery, schemas, models, versions, predictions, trainings, deployments, files, request previews, and skill installation, including empty results, pagination hints, and narrow terminal layouts.
+
+### Fixed
+
+- Print prediction output and model README content directly, confirm successful empty-body deletions, and explain how to continue pending predictions.
+- Reject conflicting prediction targets, sync/async flags, invalid webhook settings, malformed resource references, invalid dates, and overflowing durations before input uploads or API requests.
+- Validate required creation fields, deployment scaling, empty updates, JSON files, and file metadata; preserve explicit empty strings when clearing model metadata.
+- Include literal query parameters in raw API previews and reject invalid HTTP methods, conflicting body sources, malformed JSON, and GET/HEAD request bodies.
+- Return job failure exit codes during creation, report unavailable output, validate upload download URLs, and classify connection/download failures consistently.
+- Validate official-model schemas correctly when the model is passed through `--version`.
+- Reject overflowing polling intervals, invalid schema targets and file specifications before uploads, and empty or reserved profile names before clearing credentials.
+- Preserve credential precedence for explicitly empty token flags, neutralize terminal control characters in errors, and route verbose diagnostics to stderr.
+
 ## 0.1.1 — 2026-09-09
 
 ### Fixed

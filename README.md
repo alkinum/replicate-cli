@@ -43,7 +43,7 @@ replicate --help
 
 Or use `pnpm add --global @alkinum/replicate-cli`. The package name includes the `@alkinum` scope; the command is `replicate`.
 
-See the [release notes](https://github.com/alkinum/replicate-cli/releases/tag/v0.1.1) or [changelog](CHANGELOG.md) for changes. To develop the CLI, install from source with **pnpm 12.3.4**:
+See the [release notes](https://github.com/alkinum/replicate-cli/releases/tag/v0.2.0) or [changelog](CHANGELOG.md) for changes. To develop the CLI, install from source with **pnpm 12.3.4**:
 
 ```bash
 git clone https://github.com/alkinum/replicate-cli.git
@@ -214,7 +214,7 @@ Add `--json` before or after the command to get a structured success or error en
   "type": "prediction",
   "data": { "id": "example-id", "status": "succeeded" },
   "artifacts": [],
-  "meta": { "cliVersion": "0.1.1", "authSource": "env", "apiVersion": "v1" }
+  "meta": { "cliVersion": "0.2.0", "authSource": "env", "apiVersion": "v1" }
 }
 ```
 
